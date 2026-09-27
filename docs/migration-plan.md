@@ -2,11 +2,11 @@
 
 ## Baseline gate
 
-Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. Source audit and baseline documentation are in progress. The release firmware build is currently **BLOCKED** because the repository-pinned `esp` Rust toolchain is not installed in the execution environment. No milestone may be marked complete and no later milestone may begin until the unmodified firmware builds successfully and the missing baseline measurements are explicitly recorded.
+Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. The unmodified firmware now builds successfully with the ESP32-S3 Xtensa toolchain, and architecture, hardware, size, and power baselines are documented. ELF sections and the ESP-IDF application-image length are recorded; a complete flash image, linker map, runtime heap/stack/PSRAM telemetry, physical current measurements, and board-level verification remain **NOT MEASURED / NOT RUN** because they require more build artifacts, instrumentation, or hardware. M0's target-build gate is **PASS**. This PR is scoped to M0; M1 remains **NOT STARTED**.
 
 ## Ordered milestones
 
-1. **M0 — Baseline (current):** Record source architecture, hardware mapping, memory/power/build constraints, hazards, and a repeatable size-report tool. Re-run the release build and record actual ELF/binary/map measurements when the required toolchain is available. **Not green yet.**
+1. **M0 — Baseline (current PR):** Source audit, hardware map, baseline documentation, release build, ELF section report, and comparison tool are complete. Target build gate: **PASS**. Runtime memory/power and HIL items not measured are listed explicitly; no physical values are inferred. A full flash image and linker map remain outstanding.
 2. **M1 — Code hygiene:** Address identified error propagation, `unsafe`, polling, and ignored errors in small behavior-preserving changes, validating each unit.
 3. **M2 — BSP and drivers:** Centralize the verified board description and isolate testable device drivers.
 4. **M3 — Services and IPC:** Introduce system-owned peripheral services and bounded, observable communication.
@@ -28,7 +28,7 @@ Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. 
 ## Change discipline and gates
 
 - Keep the current `no_std` firmware buildable after every meaningful change.
-- Do not create SDK/runtime crates before their milestone; do not begin M1 while M0's firmware build is blocked.
+- Do not create SDK/runtime crates before their milestone. M1 is not part of this PR and remains unstarted.
 - Preserve Cargo.lock and upgrade dependency families independently.
 - Keep measurements separate from source-derived estimates and comments.
 - Require host tests for pure parsing/policy logic and HIL evidence for electrical, timing, wake, coexistence, and power claims.

@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 SECTION_GROUPS = {
-    "text": (".text", ".iram", ".flash.text"),
-    "rodata": (".rodata", ".srodata", ".flash.rodata"),
+    "text": (".text", ".rwtext", ".vectors", ".iram", ".flash.text"),
+    "rodata": (".rodata", ".rodata_desc", ".srodata", ".flash.rodata"),
     "data": (".data", ".sdata"),
     "bss": (".bss", ".sbss"),
 }

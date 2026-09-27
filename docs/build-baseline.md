@@ -8,24 +8,25 @@
 - Package: `waveshare-watch-rs` 0.4.0, edition 2021; single package, not a workspace
 - Target configured by `.cargo/config.toml`: `xtensa-esp32s3-none-elf`
 - Pinned toolchain in `rust-toolchain.toml`: custom channel `esp`
+- Installed for the baseline run with `espup 0.17.1`, explicit Xtensa Rust release `1.97.0.0`; compiler `rustc 1.97.0-nightly (8ea53bcd7 2026-07-08)`, LLVM 21.1.3, Xtensa GCC 15.2.0
 
 ## Validation outcome
 
 | Command/check | Result | Detail |
 |---|---|---|
-| `cargo build --release` | **BLOCKED / NOT BUILT** | Rustup reports `custom toolchain 'esp' ... is not installed`. No firmware artifact was generated. |
-| `cargo build --workspace --release` | **NOT RUN** | The target build is blocked by the same missing pinned toolchain; this repository has no workspace members. |
-| Host tests (`cargo test --workspace --target x86_64-unknown-linux-gnu`) | **BLOCKED / TESTS NOT RUN** | The attempt using stable failed while compiling dependency `esp-sync`: `#![feature(asm_experimental_arch)]` is rejected on stable and `xtensa_lx` is unavailable for the host target. No project tests ran; no `#[test]` or `#[cfg(test)]` items were found in `src/`. |
-| `cargo fmt --all -- --check` | **BLOCKED with pinned toolchain** | `esp` toolchain is not installed. A diagnostic run through the installed stable toolchain reports existing formatting differences across source files; source files were not reformatted in this baseline-only task. |
-| `cargo clippy --workspace --all-targets -- -D warnings` | **NOT RUN** | The pinned toolchain is missing; no embedded clippy result is available. |
-| Firmware size/link map | **NOT AVAILABLE** | No successful target build; see [memory-baseline.md](memory-baseline.md). |
+| `cargo build --release` | **PASS** | Built the ESP32-S3 firmware ELF. The baseline emits 97 compiler warnings; see below. |
+| `cargo build --workspace --release` | **PASS** | This repository contains a single package and no workspace members; workspace build completed successfully. |
+| Host tests (`cargo test --workspace --target x86_64-unknown-linux-gnu`) | **BLOCKED / TESTS NOT RUN** | With the installed Xtensa toolchain, compilation failed in dependency `esp-sync` because `xtensa_lx` is unavailable for the host target. No project tests ran; no `#[test]` or `#[cfg(test)]` items were found in `src/`. |
+| `cargo fmt --all -- --check` | **FAIL** | Rustfmt reported existing formatting differences across source files. Source files were not reformatted in this baseline-only task. |
+| `cargo clippy --workspace --all-targets -- -D warnings` | **FAIL** | Compilation stopped with 167 warnings promoted to errors, including current `static mut` references. This is a baseline finding, not a new regression. |
+| Firmware size/link map | **PARTIALLY MEASURED** | ELF section sizes, ELF file length, and ESP-IDF application image length were captured. The application image omits bootloader/partition table; no linker map or complete flash image was generated. See [memory-baseline.md](memory-baseline.md) and [firmware-size-baseline.json](firmware-size-baseline.json). |
 
-The custom toolchain blocker is environmental: only `stable-x86_64-unknown-linux-gnu` was installed, and no `espup` or Xtensa target utilities were present. The Rust toolchain is pinned intentionally by the repository. The host-test attempt additionally confirms this target-specific dependency graph cannot be tested with the installed stable host toolchain. Do not substitute a stable host build for embedded target validation.
+The initial environment had only `stable-x86_64-unknown-linux-gnu` and no `espup`; that initial build attempt was blocked. `espup install` could not query GitHub's latest release due to HTTP 403, so the explicit release `1.97.0.0` was installed using `espup install --targets esp32s3 --toolchain-version 1.97.0.0 --skip-version-parse`. This restored target buildability without changing repository toolchain configuration. The host-test attempt confirms this target-specific dependency graph cannot be tested for the x86_64 target. Do not substitute a host test for embedded target validation.
 
 ## Test inventory
 
-No Rust unit/integration test attributes or test directory were found in the checked-in source inventory. CI workflow inventory contains only a wiki-sync workflow; there is no firmware build/test workflow in the checked-in `.github/workflows`.
+The successful release build generated 97 warnings. Clippy with `-D warnings` reported 167 errors; no warning allowances or source fixes were introduced as part of the baseline task. No Rust unit/integration test attributes or test directory were found in the checked-in source inventory. CI workflow inventory contains only a wiki-sync workflow; there is no firmware build/test workflow in the checked-in `.github/workflows`.
 
 ## Reproduction
 
-Run the release build with the repository's `esp` toolchain provisioned, Xtensa target support and linker installed, and the corresponding ESP environment set up. Record the exact toolchain version, Cargo.lock hash, build output and generated artifact sizes in subsequent baseline updates.
+Source the ESP environment file generated by espup before commands requiring the Xtensa compiler. Preserve the installed toolchain version, Cargo.lock hash, build output and generated artifact sizes in subsequent baseline updates.

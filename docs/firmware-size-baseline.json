@@ -1,0 +1,41 @@
+{
+  "bytes": {
+    "bss": 245148,
+    "data": 18308,
+    "rodata": 103832,
+    "text": 578833,
+    "total": 946121
+  },
+  "elf": "target/xtensa-esp32s3-none-elf/release/waveshare-watch-rs",
+  "schema_version": 1,
+  "sections": {
+    ".bss": 245148,
+    ".comment": 254,
+    ".data": 17312,
+    ".data.wifi": 996,
+    ".eh_frame": 4,
+    ".espressif.metadata": 20,
+    ".fini": 3,
+    ".init": 3,
+    ".noinit": 0,
+    ".rodata": 75436,
+    ".rodata.wifi": 28140,
+    ".rodata_desc": 256,
+    ".rotext_dummy": 131072,
+    ".rtc_fast.bss": 0,
+    ".rtc_fast.data": 0,
+    ".rtc_fast.persistent": 0,
+    ".rtc_fast.text": 0,
+    ".rtc_slow.bss": 0,
+    ".rtc_slow.data": 0,
+    ".rtc_slow.persistent": 0,
+    ".rtc_slow.text": 0,
+    ".rwdata_dummy": 63232,
+    ".rwtext": 12904,
+    ".rwtext.wifi": 49304,
+    ".stack": 15068,
+    ".text": 515601,
+    ".vectors": 1024,
+    ".xtensa.info": 56
+  }
+}

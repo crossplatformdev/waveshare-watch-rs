@@ -28,6 +28,6 @@ The loop can wake periodically even when there is no external input. In addition
 
 ## Physical power matrix status
 
-All rows remain **NOT RUN**: boot; bright/dim watchface; AOD; display off; light/deep sleep; Wi-Fi idle/transfer; BLE advertising/connected; IMU low/high rate; audio playback/recording; SD; CPU 80/160/240 MHz; dual-core idle/busy; charging.
+All rows remain **NOT RUN**: boot; bright/dim watchface; AOD; display off; light/deep sleep; Wi-Fi idle/transfer; BLE advertising/connected; IMU low/high rate; audio playback/recording; SD; CPU 80/160/240 MHz; dual-core idle/busy; charging. The complete repeatable test-case and data-capture template is [power-test-matrix.md](power-test-matrix.md).
 
-The prescribed repeatable measurement record is in [power-test-matrix.md](power-test-matrix.md) when that matrix is created as a later task. No energy budget or “power optimized” conclusion is made from this source audit.
+No energy budget or “power optimized” conclusion is made from this source audit.

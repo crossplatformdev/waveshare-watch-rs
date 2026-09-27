@@ -23,9 +23,9 @@ def classify(section):
         return "text"
     if section.startswith(SECTION_GROUPS["rodata"]):
         return "rodata"
-    if section.endswith(SECTION_GROUPS["data"]):
+    if section.startswith(SECTION_GROUPS["data"]) or section.endswith(SECTION_GROUPS["data"]):
         return "data"
-    if section.endswith(SECTION_GROUPS["bss"]):
+    if section.startswith(SECTION_GROUPS["bss"]) or section.endswith(SECTION_GROUPS["bss"]):
         return "bss"
     return None
 

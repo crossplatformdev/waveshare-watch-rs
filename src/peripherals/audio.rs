@@ -38,7 +38,7 @@ impl<I: I2c> Es8311<I> {
         self.write_reg(0x01, 0x3F)?; // Enable all clocks, MCLK from pin
 
         // Reg 0x02: pre_div and pre_multi
-        let mut reg02 = self.read_reg(0x02).unwrap_or(0) & 0x07;
+        let mut reg02 = self.read_reg(0x02)? & 0x07;
         reg02 |= (2 - 1) << 5; // pre_div = 2
         reg02 |= 0 << 3;       // pre_multi = 0 (1x)
         self.write_reg(0x02, reg02)?;
@@ -53,12 +53,12 @@ impl<I: I2c> Es8311<I> {
         self.write_reg(0x05, ((1 - 1) << 4) | (1 - 1))?;
 
         // Reg 0x06: BCLK divider
-        let mut reg06 = self.read_reg(0x06).unwrap_or(0) & 0xE0;
+        let mut reg06 = self.read_reg(0x06)? & 0xE0;
         reg06 |= (4 - 1) & 0x1F; // bclk_div = 4
         self.write_reg(0x06, reg06)?;
 
         // Reg 0x07: LRCK high
-        let mut reg07 = self.read_reg(0x07).unwrap_or(0) & 0xC0;
+        let mut reg07 = self.read_reg(0x07)? & 0xC0;
         reg07 |= 0x00; // lrck_h = 0
         self.write_reg(0x07, reg07)?;
 

@@ -35,6 +35,7 @@ use esp_hal::spi::Mode as SpiMode;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
+use static_cell::{ConstStaticCell, StaticCell};
 
 use crate::drivers::co5300::Co5300Display;
 use crate::drivers::framebuffer::Framebuffer;
@@ -401,16 +402,19 @@ async fn main(_spawner: Spawner) {
     let i2s_periph = I2s::new(peripherals.I2S0, peripherals.DMA_CH1, i2s_config)
         .expect("I2S failed")
         .with_mclk(peripherals.GPIO16);
-    static mut I2S_TX_DESC: [DmaDescriptor; 8] = [DmaDescriptor::EMPTY; 8];
+    static I2S_TX_DESC: ConstStaticCell<[DmaDescriptor; 8]> =
+        ConstStaticCell::new([DmaDescriptor::EMPTY; 8]);
+    let i2s_tx_desc = I2S_TX_DESC.take();
     let mut i2s_tx = i2s_periph.i2s_tx
         .with_bclk(peripherals.GPIO41)
         .with_ws(peripherals.GPIO45)
         .with_dout(peripherals.GPIO40)
-        .build(unsafe { &mut I2S_TX_DESC });
+        .build(i2s_tx_desc);
 
     // Pre-generate beep sound (800Hz, 50ms, stereo 16-bit @ 16kHz = 3200 bytes)
-    static mut BEEP_BUF: [u8; 4000] = [0u8; 4000];
-    let beep_len = fill_beep_buffer(unsafe { &mut BEEP_BUF }, 800, 16000, 50);
+    static BEEP_BUF: ConstStaticCell<[u8; 4000]> = ConstStaticCell::new([0u8; 4000]);
+    let beep_buf = BEEP_BUF.take();
+    let beep_len = fill_beep_buffer(beep_buf, 800, 16000, 50);
     println!("[AUDIO] I2S OK ({} bytes beep)", beep_len);
 
     // === WiFi init (esp-radio) — RADIO STAYS OFF AT BOOT ===
@@ -474,7 +478,6 @@ async fn main(_spawner: Spawner) {
 
     // === Network Stack scaffolding (idle until radio starts) ===
     use embassy_net::{Config as NetConfig, StackResources};
-    use static_cell::StaticCell;
 
     let net_config = NetConfig::dhcpv4(Default::default());
     static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
@@ -1172,7 +1175,7 @@ async fn main(_spawner: Spawner) {
                                 let _ = audio_codec.unmute();
                                 delay.delay_millis(2); // let codec stabilize before enabling amp
                                 pa_en.set_high();
-                                if let Ok(transfer) = i2s_tx.write_dma(unsafe { &BEEP_BUF }) {
+                                if let Ok(transfer) = i2s_tx.write_dma(&*beep_buf) {
                                     let _ = transfer.wait();
                                 }
                                 // Lower amp FIRST, then mute codec to avoid pop

@@ -62,7 +62,7 @@ use crate::apps::game2048::Game2048;
 use crate::apps::tetris::TetrisGame;
 use crate::apps::flappy::FlappyGame;
 use crate::apps::maze::MazeGame;
-use crate::ui::launcher::Launcher;
+use crate::apps::launcher::Launcher;
 use crate::apps::settings::SettingsApp;
 use crate::apps::mp3player::Mp3Player;
 use crate::apps::smarthome::{HttpMethod, SmartHomeApp};
@@ -160,10 +160,20 @@ fn boot_back_target(app_state: AppState) -> AppState {
 fn apply_navigation_target(
     app_state: &mut AppState,
     target: AppState,
+    launcher: &mut Launcher,
+    settings_app: &mut SettingsApp,
     watchface: &mut WatchFace,
     page_dirty: &mut bool,
 ) {
+    if *app_state == AppState::Settings && target != AppState::Settings {
+        settings_app.exit();
+    }
     *app_state = target;
+    if target == AppState::Launcher {
+        launcher.enter();
+    } else if target == AppState::Settings {
+        settings_app.enter();
+    }
     if target == AppState::Watchface {
         watchface.force_redraw();
         *page_dirty = true;
@@ -1448,7 +1458,7 @@ async fn main(_spawner: Spawner) {
                             WatchFace::is_apps_zone(last_touch_x, last_touch_y),
                             false,
                         ) {
-                            apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                            apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                         // Gyro toggle
                         } else if WatchFace::is_gyro_zone(last_touch_y) {
                             let enabled = watchface.toggle_gyro();
@@ -1471,7 +1481,7 @@ async fn main(_spawner: Spawner) {
                     false,
                     boot_button.is_low(),
                 ) {
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     if boot_button.is_low() {
                         Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                     }
@@ -1513,53 +1523,70 @@ async fn main(_spawner: Spawner) {
                         watchface.force_redraw();
                         page_dirty = true;
                     }
+                    AppResult::Transition(_) => {}
                 }
 
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 
             AppState::Launcher => {
-                // Track touch Y for tap detection
+                // Track touch position for tap detection
                 if let Ok((point, _)) = touch.poll() {
-                    if let Some(tp) = point { last_touch_y = tp.y; }
-                }
-                if let Some(new_state) = launcher.update(swipe_event, tap_event, last_touch_y) {
-                    if let Some(manifest) = app_manifest(new_state) {
-                        if manifest.api_version == APP_API_VERSION
-                            && manifest.lifecycle == AppLifecycle::Foreground
-                        {
-                            app_state = new_state;
-                            match app_state {
-                                AppState::Snake => snake_game.enter(),
-                                AppState::Game2048 => { game_2048.enter(); game_2048.render(&mut fb); fb.flush(&mut display); }
-                                AppState::Tetris => tetris_game.enter(),
-                                AppState::Flappy => flappy_game.enter(),
-                                AppState::Maze => maze_game.enter(),
-                                AppState::Mp3Player => mp3_player.enter(),
-                                AppState::SmartHome => smarthome_app.enter(),
-                                AppState::Settings => {}
-                                AppState::Watchface | AppState::Launcher => {}
-                            }
-                        }
-                    } else if new_state == AppState::Watchface {
-                        apply_navigation_target(
-                            &mut app_state,
-                            AppState::Watchface,
-                            &mut watchface,
-                            &mut page_dirty,
-                        )
+                    if let Some(tp) = point {
+                        last_touch_x = tp.x;
+                        last_touch_y = tp.y;
                     }
-                } else {
-                    launcher.render(&mut fb);
-                    fb.flush(&mut display);
+                }
+                let touch_point = (tap_event || touch_int.is_low()).then_some(TouchPoint {
+                    x: last_touch_x,
+                    y: last_touch_y,
+                    fingers: 1,
+                });
+                let input = sandboxed_app_input(app_state, touch_point, swipe_event, tap_event, accel, dt_ms.max(1));
+                match launcher.update(&input) {
+                    AppResult::Transition(new_state) => {
+                        if let Some(manifest) = app_manifest(new_state) {
+                            if manifest.api_version == APP_API_VERSION
+                                && manifest.lifecycle == AppLifecycle::Foreground
+                            {
+                                launcher.exit();
+                                app_state = new_state;
+                                match app_state {
+                                    AppState::Snake => snake_game.enter(),
+                                    AppState::Game2048 => { game_2048.enter(); game_2048.render(&mut fb); fb.flush(&mut display); }
+                                    AppState::Tetris => tetris_game.enter(),
+                                    AppState::Flappy => flappy_game.enter(),
+                                    AppState::Maze => maze_game.enter(),
+                                    AppState::Mp3Player => mp3_player.enter(),
+                                    AppState::SmartHome => smarthome_app.enter(),
+                                    AppState::Settings => settings_app.enter(),
+                                    AppState::Watchface | AppState::Launcher => {}
+                                }
+                            }
+                        } else if new_state == AppState::Watchface {
+                            apply_navigation_target(
+                                &mut app_state,
+                                AppState::Watchface,
+                                &mut launcher,
+                                &mut settings_app,
+                                &mut watchface,
+                                &mut page_dirty,
+                            )
+                        }
+                    }
+                    AppResult::Continue => {
+                        launcher.render(&mut fb);
+                        fb.flush(&mut display);
+                    }
+                    AppResult::Exit => {}
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1574,7 +1601,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1588,7 +1615,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1607,7 +1634,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1623,7 +1650,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1665,7 +1692,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
@@ -1680,22 +1707,23 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 
             AppState::Settings => {
-                settings_app.update(dt_ms.max(1));
-                // For T9: detect touch down via GPIO38 for rapid multi-tap
-                if tap_event {
-                    settings_app.handle_tap(last_touch_x, last_touch_y);
-                }
-                // Also read live touch position for keyboard area
                 if let Ok((Some(tp), _)) = touch.poll() {
                     last_touch_x = tp.x;
                     last_touch_y = tp.y;
                 }
+                let touch_point = (tap_event || touch_int.is_low()).then_some(TouchPoint {
+                    x: last_touch_x,
+                    y: last_touch_y,
+                    fingers: 1,
+                });
+                let input = sandboxed_app_input(app_state, touch_point, swipe_event, tap_event, accel, dt_ms.max(1));
+                let _ = settings_app.update(&input);
                 settings_app.render(&mut fb);
                 if now >= next_watchface_flush {
                     fb.flush_vsync(&mut display, &te_pin);
@@ -1703,7 +1731,7 @@ async fn main(_spawner: Spawner) {
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);
-                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
                     Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }

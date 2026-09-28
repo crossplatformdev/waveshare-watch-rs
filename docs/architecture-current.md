@@ -4,7 +4,7 @@ Baseline source revision: `5eb445bce1222a7ac9045dfb33231bc39b29abc0`
 
 ## Overview
 
-The firmware is one `no_std`, `no_main` Cargo package (`waveshare-watch-rs` 0.4.0), not a workspace. `src/main.rs` owns peripheral initialization, global state, input handling, power/display state transitions, networking orchestration, and application dispatch. The code is asynchronous at the main-loop boundary through `esp-rtos`/Embassy; the applications and rendering are synchronous and run in the same main task. A separate host-side utility crate under `tools/wasmi-spike` now benchmarks a tiny shared Wasm payload with Wasmi, while the firmware carries a feature-gated (`wasm-spike`) probe that can log the same payload's compile/instantiate/host-call/fuel metrics on Xtensa builds. A second host-side tool, `tools/watchctl`, now consumes a shared SDK-facing app policy module to emit and validate package manifests against the current stable API.
+The firmware is one `no_std`, `no_main` Cargo package (`waveshare-watch-rs` 0.4.0), not a workspace. `src/main.rs` owns peripheral initialization, global state, input handling, power/display state transitions, networking orchestration, and application dispatch. The code is asynchronous at the main-loop boundary through `esp-rtos`/Embassy; the applications and rendering are synchronous and run in the same main task. A separate host-side utility crate under `tools/wasmi-spike` now benchmarks a tiny shared Wasm payload with Wasmi, while the firmware carries a feature-gated (`wasm-spike`) probe that can log the same payload's compile/instantiate/host-call/fuel metrics on Xtensa builds. A second host-side tool, `tools/watchctl`, now consumes a shared SDK-facing app policy module to emit and validate package manifests against the current stable API. The launcher and settings flow now also participate in that in-process app contract as manifest-declared system apps rather than purely ad hoc UI branches.
 
 There is no independent kernel scheduler, application process isolation, inter-core service IPC, or application ABI. App state is selected by a single `AppState` enum and apps receive a frame-oriented `AppInput`. A narrow M9 slice now adds a central app manifest table with API-version and lifecycle metadata, plus lifecycle entry shims layered over the existing in-process apps. A narrow M11 slice extends that manifest with sandbox policy (capabilities plus tick budget), and `main.rs` now sanitizes selected inputs and service entry points against those declarations.
 
@@ -15,8 +15,8 @@ There is no independent kernel scheduler, application process isolation, inter-c
 | Board constants | `src/board.rs` | Pin numbers, bus addresses, display geometry |
 | Display drivers | `src/drivers/co5300.rs`, `qspi_bus.rs`, `framebuffer.rs` | CO5300 command sequence, QSPI pixel transfers, RGB565 drawing and full/rectangular flushes |
 | Peripheral drivers | `src/peripherals/*.rs` | AXP2101, FT3168, PCF85063A, QMI8658, ES8311, radio helpers, HTTP parsing/client scaffolding |
-| UI | `src/ui/*.rs` | Watchface, pages, launcher, T9 keyboard, power page |
-| Apps | `src/apps/*.rs` | Snake, 2048, Tetris, Flappy, Maze, Settings, MP3-player UI, SmartHome UI |
+| UI | `src/ui/*.rs` | Watchface, pages, T9 keyboard, power page |
+| Apps | `src/apps/*.rs` | Launcher, Snake, 2048, Tetris, Flappy, Maze, Settings, MP3-player UI, SmartHome UI |
 | Orchestration | `src/main.rs` | Hardware bring-up, adaptive timed/event loop, state machines, rendering and app dispatch |
 
 The same I2C peripheral is shared using `RefCell` and `RefCellDevice`. The display uses SPI2 in QSPI mode with DMA; the SD card uses SPI3. Wi-Fi and BLE share an `esp-radio` controller. The main async function continues to own the UI/event loop and service orchestration on core 0, while a second-core Embassy executor is brought online on core 1 for background work and emits a live heartbeat for runtime telemetry.
@@ -32,7 +32,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 ## Product functionality represented in code
 
 - Display, touch, RTC, IMU, PMIC battery/status, SD card, speaker-output beep, Wi-Fi connection/NTP, and BLE advertising have code paths.
-- App implementations are statically linked and dispatched in-process. Launcher-visible apps now share a versioned manifest (`src/apps/mod.rs`) that names the app, assigns a stable string ID, records its lifecycle contract, and declares a narrow sandbox policy (runtime tick budget plus capability flags) without tying that metadata to board peripherals. The SDK-facing pieces of that contract (`src/app_sdk.rs`) are host-compatible so `watchctl` can author and validate package metadata without pulling in the embedded runtime.
+- App implementations are statically linked and dispatched in-process. Manifest-declared apps in `src/apps/mod.rs` now include both user-facing entries and a narrow set of system apps (launcher plus settings), with launcher visibility tracked separately from system/user classification. The same registry assigns stable string IDs, records the foreground lifecycle contract, and declares a narrow sandbox policy (runtime tick budget plus capability flags) without tying that metadata to board peripherals. The SDK-facing pieces of that contract (`src/app_sdk.rs`) are host-compatible so `watchctl` can author and validate package metadata without pulling in the embedded runtime.
 - The MP3 player is still UI scaffolding only. The SmartHome application now hands bounded HTTP requests to `main.rs`, which owns the network stack and writes short status/response summaries back to the app state; this still does not establish TLS or broader product-level HTTP behavior.
 - Driver structs and board constants do not by themselves establish that a feature is electrically verified or complete; see [hardware-map.md](hardware-map.md) and [known-hardware-errata.md](known-hardware-errata.md).
 
@@ -49,6 +49,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 - The present M10 slice does not integrate Wasm apps. It only adds a tiny shared benchmark module, a host-side memory/startup/host-call probe, and a firmware feature gate for Xtensa measurements. Until that probe is executed on hardware and its memory/latency numbers are captured, Wasm remains **not yet viable for M11 integration** in this repository.
 - The present M11 slice is still a cooperative in-process sandbox, not isolation. It uses manifest-declared capabilities and tick budgets to gate selected inputs and main-owned services, but apps still run in the same address space and `main.rs` still retains ultimate control over rendering, networking, audio, and storage.
 - The present M12 slice does not build a full package format, installer, or SDK crate. It only extracts the stable manifest/sandbox vocabulary into a shared host-compatible module and provides a minimal `watchctl` command for manifest templating and validation.
+- The present M13 slice migrates only launcher/settings into that shared app contract. Watchface pages still sit outside the app manifest, and most app creation/transition logic remains hard-coded in `main.rs`.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

@@ -8,14 +8,15 @@ use embedded_graphics::prelude::DrawTarget;
 use crate::app_sdk::{AppCapabilities, AppLifecycle, AppSandboxPolicy, APP_API_VERSION};
 use crate::peripherals::touch::{SwipeDirection, TouchPoint};
 
-pub mod snake;
-pub mod game2048;
-pub mod tetris;
 pub mod flappy;
+pub mod game2048;
+pub mod launcher;
 pub mod maze;
-pub mod settings;
 pub mod mp3player;
+pub mod settings;
 pub mod smarthome;
+pub mod snake;
+pub mod tetris;
 
 /// Input state passed to apps each frame
 pub struct AppInput {
@@ -30,15 +31,22 @@ pub struct AppInput {
 pub enum AppResult {
     Continue,
     Exit, // Return to launcher/watchface
+    Transition(AppState),
 }
 
 /// Common trait for all apps/games
 pub trait App {
     fn name(&self) -> &str;
-    fn api_version(&self) -> u16 { APP_API_VERSION }
-    fn lifecycle(&self) -> AppLifecycle { AppLifecycle::Foreground }
+    fn api_version(&self) -> u16 {
+        APP_API_VERSION
+    }
+    fn lifecycle(&self) -> AppLifecycle {
+        AppLifecycle::Foreground
+    }
     fn setup(&mut self);
-    fn enter(&mut self) { self.setup(); }
+    fn enter(&mut self) {
+        self.setup();
+    }
     fn exit(&mut self) {}
     fn update(&mut self, input: &AppInput) -> AppResult;
     fn render<D: DrawTarget<Color = Rgb565>>(&self, d: &mut D);
@@ -59,6 +67,12 @@ pub enum AppState {
     Settings,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AppKind {
+    System,
+    User,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct AppManifest {
     pub state: AppState,
@@ -66,16 +80,33 @@ pub struct AppManifest {
     pub display_name: &'static str,
     pub api_version: u16,
     pub lifecycle: AppLifecycle,
+    pub kind: AppKind,
+    pub launcher_visible: bool,
     pub sandbox: AppSandboxPolicy,
 }
 
-pub const APP_MANIFESTS: [AppManifest; 8] = [
+pub const APP_MANIFESTS: [AppManifest; 9] = [
+    AppManifest {
+        state: AppState::Launcher,
+        app_id: "launcher",
+        display_name: "Launcher",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::System,
+        launcher_visible: false,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 100,
+            capabilities: AppCapabilities::TOUCH,
+        },
+    },
     AppManifest {
         state: AppState::Snake,
         app_id: "snake",
         display_name: "Snake",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
             capabilities: AppCapabilities::AUDIO,
@@ -87,6 +118,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "2048",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
             capabilities: AppCapabilities::NONE,
@@ -98,6 +131,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Tetris",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
             capabilities: AppCapabilities::NONE,
@@ -109,6 +144,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Flappy Bird",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
             capabilities: AppCapabilities::TOUCH,
@@ -120,6 +157,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Maze (Tilt)",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
             capabilities: AppCapabilities::MOTION,
@@ -131,6 +170,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "MP3 Player",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 200,
             capabilities: AppCapabilities::AUDIO.union(AppCapabilities::STORAGE),
@@ -142,6 +183,8 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Smart Home",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 100,
             capabilities: AppCapabilities::NETWORK,
@@ -153,19 +196,29 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Settings",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::System,
+        launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 50,
-            capabilities: AppCapabilities::NETWORK,
+            capabilities: AppCapabilities::TOUCH.union(AppCapabilities::NETWORK),
         },
     },
 ];
 
 pub fn app_manifest(state: AppState) -> Option<&'static AppManifest> {
-    APP_MANIFESTS.iter().find(|manifest| manifest.state == state)
+    APP_MANIFESTS
+        .iter()
+        .find(|manifest| manifest.state == state)
 }
 
 pub fn app_supports(state: AppState, capability: AppCapabilities) -> bool {
     app_manifest(state)
         .map(|manifest| manifest.sandbox.capabilities.contains(capability))
         .unwrap_or(false)
+}
+
+pub fn launcher_entries() -> impl Iterator<Item = &'static AppManifest> {
+    APP_MANIFESTS
+        .iter()
+        .filter(|manifest| manifest.launcher_visible)
 }

@@ -714,7 +714,8 @@ async fn main(_spawner: Spawner) {
     let mut wifi_started: bool = false;         // controller.start() called
     let mut wifi_connected: bool = false;       // connect_async succeeded
     let mut ntp_synced: bool = false;
-    let mut last_wireless_policy_change = Instant::now();
+    let mut last_wifi_policy_change = Instant::now();
+    let mut last_ble_policy_change = Instant::now();
     // Request pending from a UI tap on the WiFi button.
     let mut wifi_toggle_request: bool = false;
     // BLE state
@@ -1001,7 +1002,8 @@ async fn main(_spawner: Spawner) {
                 if app_state == AppState::Watchface {
                     watchface.force_redraw();
                     page_dirty = true;
-                    last_wireless_policy_change = now;
+                    last_wifi_policy_change = now;
+                    last_ble_policy_change = now;
                 }
             }
         }
@@ -1043,11 +1045,11 @@ async fn main(_spawner: Spawner) {
         // its own. Turning it back on is manual — intentional.
         // Debounce the WiFi button: ignore rapid re-taps within 1 s.
         if wifi_toggle_request
-            && (now - last_wireless_policy_change).as_millis() >= WIRELESS_TOGGLE_DEBOUNCE_MS
+            && (now - last_wifi_policy_change).as_millis() >= WIRELESS_TOGGLE_DEBOUNCE_MS
         {
             wifi_on_request = !wifi_on_request;
             wifi_toggle_request = false;
-            last_wireless_policy_change = now;
+            last_wifi_policy_change = now;
             println!("[WIFI] User toggled → {}", if wifi_on_request { "ON" } else { "OFF" });
         } else if wifi_toggle_request {
             wifi_toggle_request = false; // swallow the bounce
@@ -1096,7 +1098,7 @@ async fn main(_spawner: Spawner) {
                     }
                 }
             }
-            last_wireless_policy_change = now;
+            last_wifi_policy_change = now;
         }
         if !wifi_on_request && wifi_connected {
             let _ = wifi_controller.disconnect_async().await;
@@ -1107,12 +1109,12 @@ async fn main(_spawner: Spawner) {
             wifi_started = false;
             watchface.force_redraw();
             page_dirty = true;
-            last_wireless_policy_change = now;
+            last_wifi_policy_change = now;
         }
         // Safety net: radio leases auto-expire after prolonged user idle.
-        if wifi_on_request && wireless_idle_expired(now, last_wireless_policy_change, idle_secs) {
+        if wifi_on_request && wireless_idle_expired(now, last_wifi_policy_change, idle_secs) {
             wifi_on_request = false;
-            last_wireless_policy_change = now;
+            last_wifi_policy_change = now;
         }
 
         // === BLE state machine ===
@@ -1135,8 +1137,8 @@ async fn main(_spawner: Spawner) {
             power_stats.ble_on = ble_on;
             watchface.force_redraw();
             page_dirty = true;
-            last_wireless_policy_change = now;
-        } else if ble_on && wireless_idle_expired(now, last_wireless_policy_change, idle_secs) {
+            last_ble_policy_change = now;
+        } else if ble_on && wireless_idle_expired(now, last_ble_policy_change, idle_secs) {
             let _ = crate::peripherals::ble::stop_advertising(&mut ble_connector);
             println!("[BLE] Auto-off after idle");
             ble_on = false;
@@ -1144,7 +1146,7 @@ async fn main(_spawner: Spawner) {
             power_stats.ble_on = false;
             watchface.force_redraw();
             page_dirty = true;
-            last_wireless_policy_change = now;
+            last_ble_policy_change = now;
         }
 
         // === AOD render path ===

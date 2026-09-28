@@ -19,13 +19,13 @@ There is no independent kernel scheduler, application process isolation, inter-c
 | Apps | `src/apps/*.rs` | Snake, 2048, Tetris, Flappy, Maze, Settings, MP3-player UI, SmartHome UI |
 | Orchestration | `src/main.rs` | Hardware bring-up, adaptive timed/event loop, state machines, rendering and app dispatch |
 
-The same I2C peripheral is shared using `RefCell` and `RefCellDevice`. The display uses SPI2 in QSPI mode with DMA; the SD card uses SPI3. Wi-Fi and BLE share an `esp-radio` controller. One Embassy task runs the network stack; the main async function owns the rest of the application.
+The same I2C peripheral is shared using `RefCell` and `RefCellDevice`. The display uses SPI2 in QSPI mode with DMA; the SD card uses SPI3. Wi-Fi and BLE share an `esp-radio` controller. The main async function continues to own the UI/event loop and service orchestration on core 0, while a second-core Embassy executor is brought online on core 1 for background work and emits a live heartbeat for runtime telemetry.
 
 ## Runtime and rendering
 
-`main` initializes the HAL at 160 MHz, internal and PSRAM allocators, RTOS timer, buses, display, sensors, storage/audio interfaces, and radio objects. It allocates a two-buffer display framebuffer and two full-frame swipe snapshots. An adaptive `select3` wait races a timer against falling-edge waits on touch and BOOT, after which the same main task samples services and runs application logic.
+`main` initializes the HAL at 160 MHz, internal and PSRAM allocators, RTOS timer, software interrupts, buses, display, sensors, storage/audio interfaces, and radio objects. It allocates a two-buffer display framebuffer and two full-frame swipe snapshots. An adaptive `select3` wait races a timer against falling-edge waits on touch and BOOT, after which the core-0 main task samples services and runs application logic. Core 1 now hosts a second Embassy executor that publishes a heartbeat used by the power diagnostics instead of leaving the secondary core unused.
 
-The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path.
+The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path. The firmware now records the current sleep budget and worst observed wake-latency slip in `PowerStats` for on-device inspection.
 
 Most screen changes transmit the complete framebuffer. `Framebuffer::flush_region` supports a bounded rectangle, but normal rendering does not use a dirty-region compositor. TE synchronization is a bounded GPIO level loop, not an interrupt/event wait.
 
@@ -41,7 +41,7 @@ Most screen changes transmit the complete framebuffer. `Framebuffer::flush_regio
 - `main.rs` is the central owner of hardware and policy; hardware APIs are not isolated behind system services.
 - Error results are frequently ignored or converted to defaults in initialization and the event loop.
 - There is no app isolation, capability model, resource lease manager, transactional app install, OTA flow, simulator, or host test suite in the baseline.
-- No dual-core scheduling policy or application-level core-affinity policy is implemented.
+- The present M4 slice establishes only a coarse core policy (UI/event loop plus active services on core 0; secondary executor reserved on core 1). It does not yet migrate more application work to core 1 or include broader latency instrumentation, load balancing, or application-level affinity controls.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

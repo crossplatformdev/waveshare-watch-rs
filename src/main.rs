@@ -12,6 +12,7 @@ mod apps;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use embedded_hal_bus::i2c::RefCellDevice;
 use esp_alloc as _;
@@ -29,8 +30,10 @@ use esp_hal::dma::{DmaRxBuf, DmaTxBuf};
 use esp_hal::dma_buffers;
 use esp_hal::gpio::{InputConfig, Level, Output, OutputConfig, Pull, Input};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
+use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::spi::Mode as SpiMode;
+use esp_hal::system::Stack as CoreStack;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
@@ -90,6 +93,19 @@ struct SmartHomeResponse {
 
 static SMARTHOME_REQUEST: Signal<CriticalSectionRawMutex, SmartHomeRequest> = Signal::new();
 static SMARTHOME_RESPONSE: Signal<CriticalSectionRawMutex, SmartHomeResponse> = Signal::new();
+static EXECUTOR_CORE_1: StaticCell<esp_rtos::embassy::Executor> = StaticCell::new();
+static APP_CORE_STACK: StaticCell<CoreStack<8192>> = StaticCell::new();
+static CORE1_HEARTBEAT_MS: AtomicU32 = AtomicU32::new(0);
+
+fn now_ms() -> u32 { Instant::now().as_millis() as u32 }
+
+#[embassy_executor::task]
+async fn core1_heartbeat_task() -> ! {
+    loop {
+        CORE1_HEARTBEAT_MS.store(now_ms(), Ordering::Relaxed);
+        Timer::after(Duration::from_secs(1)).await;
+    }
+}
 
 // Simple NTP sync (UDP to pool.ntp.org:123)
 async fn ntp_sync(
@@ -282,6 +298,7 @@ async fn main(_spawner: Spawner) {
         esp_hal::Config::default()
             .with_cpu_clock(esp_hal::clock::CpuClock::_160MHz)
     );
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
 
     // PSRAM
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
@@ -557,9 +574,21 @@ async fn main(_spawner: Spawner) {
 
     let (stack, runner) = embassy_net::new(wifi_interfaces.sta, net_config, resources, 12345u64);
 
-    // Spawn network runner task. It does nothing useful until the radio
-    // has been started, but spawning it here avoids having to hot-spawn
-    // a task from inside the main loop.
+    // Core policy: keep the main UI/event loop and active services on core 0
+    // while reserving a second Embassy executor on core 1 for background work.
+    let app_core_stack = APP_CORE_STACK.init(CoreStack::new());
+    esp_rtos::start_second_core(
+        peripherals.CPU_CTRL,
+        sw_int.software_interrupt0,
+        sw_int.software_interrupt1,
+        app_core_stack,
+        || {
+            let executor = EXECUTOR_CORE_1.init(esp_rtos::embassy::Executor::new());
+            executor.run(|spawner| {
+                spawner.spawn(core1_heartbeat_task()).ok();
+            });
+        },
+    );
     _spawner.spawn(net_task(runner)).ok();
     _spawner.spawn(smarthome_http_task(stack)).ok();
 
@@ -574,6 +603,7 @@ async fn main(_spawner: Spawner) {
     // by the Power page renderer. Kept as plain POD so reading it is free.
     let mut power_stats = PowerStats::new();
     power_stats.cpu_mhz = 160;
+    power_stats.core1_online = false;
     let mut app_state = AppState::Watchface;
     let mut snake_game = SnakeGame::new();
     let mut game_2048 = Game2048::new();
@@ -721,6 +751,8 @@ async fn main(_spawner: Spawner) {
                 | AppState::Maze => Duration::from_millis(33),
             }
         };
+        power_stats.last_tick_ms = tick.as_millis().min(u16::MAX as u64) as u16;
+        let wait_started = Instant::now();
 
         // Sleep until the tick budget elapses OR a falling edge arrives on touch / boot button.
         // Notes:
@@ -733,10 +765,16 @@ async fn main(_spawner: Spawner) {
             touch_int.wait_for_falling_edge(),
             boot_button.wait_for_falling_edge(),
         ).await;
+        let wake_elapsed = (Instant::now() - wait_started).as_millis();
+        if wake_elapsed > tick.as_millis() {
+            let slip = (wake_elapsed - tick.as_millis()).min(u16::MAX as u64) as u16;
+            power_stats.wake_slip_ms_max = power_stats.wake_slip_ms_max.max(slip);
+        }
 
         let now = Instant::now();
         let dt_ms = (now - last_frame).as_millis() as u32;
         last_frame = now;
+        power_stats.core1_online = now_ms().wrapping_sub(CORE1_HEARTBEAT_MS.load(Ordering::Relaxed)) <= 2_000;
 
         // === Sensors (gated by need + screen state) ===
         // IMU only when an interactive consumer needs it (gyro enabled, IMU-driven game, sensors page).

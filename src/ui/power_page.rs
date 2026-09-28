@@ -171,6 +171,17 @@ pub fn draw_power_page<D: DrawTarget<Color = Rgb565>>(
     let mut b_buf = [0u8; 20];
     let b_s = fmt_batt(&mut b_buf, stats.battery_mv, stats.battery_pct, stats.charging);
     Text::with_alignment(b_s, Point::new(right_x, y), value, Alignment::Right).draw(d)?;
+    y += row_h;
+
+    Text::new("RTOS:", Point::new(left_x, y), label).draw(d)?;
+    let rtos_s = if stats.core1_online { "UI C0 / BG C1" } else { "UI C0 ONLY" };
+    Text::with_alignment(rtos_s, Point::new(right_x, y), value, Alignment::Right).draw(d)?;
+    y += row_h;
+
+    Text::new("WAKE:", Point::new(left_x, y), label).draw(d)?;
+    let mut w_buf = [0u8; 24];
+    let w_s = fmt_wake(&mut w_buf, stats.last_tick_ms, stats.wake_slip_ms_max);
+    Text::with_alignment(w_s, Point::new(right_x, y), value, Alignment::Right).draw(d)?;
 
     // Reboot button
     let rbt_x: i32 = cx - 50;
@@ -288,5 +299,15 @@ fn fmt_batt<'a>(buf: &'a mut [u8; 20], mv: u16, pct: u8, chg: bool) -> &'a str {
     if chg {
         for &c in b" CHG" { buf[p] = c; p += 1; }
     }
+    core::str::from_utf8(&buf[..p]).unwrap_or("?")
+}
+
+fn fmt_wake<'a>(buf: &'a mut [u8; 24], tick_ms: u16, slip_ms: u16) -> &'a str {
+    let mut p = 0;
+    for &c in b"tick " { buf[p] = c; p += 1; }
+    fmt_u16(buf, &mut p, tick_ms);
+    for &c in b"ms + " { buf[p] = c; p += 1; }
+    fmt_u16(buf, &mut p, slip_ms);
+    for &c in b"ms" { buf[p] = c; p += 1; }
     core::str::from_utf8(&buf[..p]).unwrap_or("?")
 }

@@ -2,7 +2,7 @@
 
 ## Baseline gate
 
-Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. The unmodified firmware now builds successfully with the ESP32-S3 Xtensa toolchain, and architecture, hardware, size, and power baselines are documented. ELF sections and the ESP-IDF application-image length are recorded; a complete flash image, linker map, runtime heap/stack/PSRAM telemetry, physical current measurements, and board-level verification remain **NOT MEASURED / NOT RUN** because they require more build artifacts, instrumentation, or hardware. M0's target-build gate is **PASS**. Subsequent commits on this branch completed targeted M1 hygiene fixes, started M2 with board-description centralization in the driver layer, and now start M3 with main-owned SmartHome HTTP dispatch.
+Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. The unmodified firmware now builds successfully with the ESP32-S3 Xtensa toolchain, and architecture, hardware, size, and power baselines are documented. ELF sections and the ESP-IDF application-image length are recorded; a complete flash image, linker map, runtime heap/stack/PSRAM telemetry, physical current measurements, and board-level verification remain **NOT MEASURED / NOT RUN** because they require more build artifacts, instrumentation, or hardware. M0's target-build gate is **PASS**. Subsequent commits on this branch completed targeted M1 hygiene fixes, started M2 with board-description centralization in the driver layer, started M3 with main-owned SmartHome HTTP dispatch, and now start M4 with an explicit dual-core executor policy, live core-1 heartbeat telemetry, and lightweight wake-latency tracking.
 
 ## Ordered milestones
 
@@ -28,7 +28,7 @@ Milestone 0 began from clean commit `5eb445bce1222a7ac9045dfb33231bc39b29abc0`. 
 ## Change discipline and gates
 
 - Keep the current `no_std` firmware buildable after every meaningful change.
-- Do not create SDK/runtime crates before their milestone. Current branch work has completed targeted M1 hygiene fixes, started M2, and is taking a narrow M3 service slice; keep each step small and behavior-preserving.
+- Do not create SDK/runtime crates before their milestone. Current branch work has completed targeted M1 hygiene fixes and is taking narrow M2/M3/M4 slices; keep each step small and behavior-preserving.
 - Preserve Cargo.lock and upgrade dependency families independently.
 - Keep measurements separate from source-derived estimates and comments.
 - Require host tests for pure parsing/policy logic and HIL evidence for electrical, timing, wake, coexistence, and power claims.

@@ -12,8 +12,8 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::geometry::Point as EgPoint;
 
+use crate::app_sdk::SwipeDirection;
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
 
 const W: i32 = 410;
 const H: i32 = 502;

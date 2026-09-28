@@ -14,6 +14,22 @@ impl AppLifecycle {
 
 pub const APP_API_VERSION: u16 = 1;
 
+#[derive(Debug, Clone, Copy)]
+pub struct TouchPoint {
+    pub x: u16,
+    pub y: u16,
+    pub fingers: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SwipeDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+    Tap,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AppCapabilities(u16);
 

@@ -12,7 +12,7 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::text::{Alignment, Text};
 
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
+use crate::app_sdk::SwipeDirection;
 
 const GRID_SIZE: i32 = 20;
 const GRID_W: i32 = 20;

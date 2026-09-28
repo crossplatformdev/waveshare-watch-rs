@@ -48,15 +48,15 @@ use static_cell::{ConstStaticCell, StaticCell};
 use crate::drivers::co5300::Co5300Display;
 use crate::drivers::framebuffer::Framebuffer;
 use crate::drivers::qspi_bus::QspiBus;
+use crate::app_sdk::{AppCapabilities, AppLifecycle, SwipeDirection, TouchPoint, APP_API_VERSION};
 use crate::peripherals::power::Axp2101Power;
 use crate::peripherals::power_stats::{DisplayState, PowerStats, WifiMode};
-use crate::peripherals::touch::{Ft3168Touch, SwipeDirection, TouchPoint};
+use crate::peripherals::touch::Ft3168Touch;
 use crate::peripherals::rtc::Pcf85063aRtc;
 use crate::peripherals::imu::Qmi8658Imu;
 use crate::ui::watchface::WatchFace;
 use crate::ui::pages::{self, Page};
 use crate::ui::power_page;
-use crate::app_sdk::{AppCapabilities, AppLifecycle, APP_API_VERSION};
 use crate::apps::{app_manifest, app_supports, App, AppInput, AppResult, AppState};
 use crate::apps::snake::SnakeGame;
 use crate::apps::game2048::Game2048;
@@ -1642,7 +1642,7 @@ async fn main(_spawner: Spawner) {
             AppState::Flappy => {
                 // Touch via GPIO38 (instant)
                 let touch_down = touch_int.is_low();
-                let fake_touch = if touch_down { Some(crate::peripherals::touch::TouchPoint { x: 200, y: 250, fingers: 1 }) } else { None };
+                let fake_touch = if touch_down { Some(TouchPoint { x: 200, y: 250, fingers: 1 }) } else { None };
                 let input = sandboxed_app_input(app_state, fake_touch, swipe_event, tap_event, accel, dt_ms.max(1));
                 flappy_game.update(&input);
                 // Double-buffered render: draw to fb, swap+flush with VSync

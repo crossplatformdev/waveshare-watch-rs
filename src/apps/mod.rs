@@ -5,8 +5,9 @@
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::DrawTarget;
 
-use crate::app_sdk::{AppCapabilities, AppLifecycle, AppSandboxPolicy, APP_API_VERSION};
-use crate::peripherals::touch::{SwipeDirection, TouchPoint};
+use crate::app_sdk::{
+    AppCapabilities, AppLifecycle, AppSandboxPolicy, SwipeDirection, TouchPoint, APP_API_VERSION,
+};
 
 pub mod flappy;
 pub mod game2048;

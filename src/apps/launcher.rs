@@ -5,8 +5,8 @@ use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle, RoundedRectangle};
 use embedded_graphics::text::{Alignment, Text};
 
+use crate::app_sdk::SwipeDirection;
 use crate::apps::{launcher_entries, App, AppInput, AppResult, AppState};
-use crate::peripherals::touch::SwipeDirection;
 
 const ITEM_H: i32 = 65;
 const ITEM_GAP: i32 = 6;

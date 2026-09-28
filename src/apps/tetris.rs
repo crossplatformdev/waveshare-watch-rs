@@ -12,7 +12,7 @@ use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::geometry::Point as EgPoint;
 
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
+use crate::app_sdk::SwipeDirection;
 
 const GW: usize = 12;
 const GH: usize = 16;

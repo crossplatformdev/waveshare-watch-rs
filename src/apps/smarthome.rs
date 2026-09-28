@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Smart Home / API controller
 // Configurable buttons that send HTTP requests when tapped
 // Perfect for Home Assistant, domotics, custom APIs

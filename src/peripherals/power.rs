@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // AXP2101 Power Management wrapper
 // Reference: 05_LVGL_AXP2101_ADC_Data.ino
 

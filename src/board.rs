@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Board pin definitions for Waveshare ESP32-S3-Touch-AMOLED-2.06
 // Reference: pin_config.h from Waveshare Arduino examples
 

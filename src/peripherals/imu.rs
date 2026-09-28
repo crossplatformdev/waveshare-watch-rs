@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // QMI8658 6-axis IMU driver (Accelerometer + Gyroscope)
 // Reference: SensorLib/src/SensorQMI8658.hpp
 // I2C address 0x6B

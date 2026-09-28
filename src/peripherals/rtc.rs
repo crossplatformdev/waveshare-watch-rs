@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // PCF85063A RTC driver
 // Reference: OLEDS3Watch/components/bsp_extra/src/pcf85063a.c
 // I2C address 0x51, BCD encoded time registers

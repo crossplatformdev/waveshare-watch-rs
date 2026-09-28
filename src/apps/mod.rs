@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // App framework - common types and trait for all apps/games
 
 use embedded_graphics::pixelcolor::Rgb565;

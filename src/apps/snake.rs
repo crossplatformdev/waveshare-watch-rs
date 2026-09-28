@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Snake Game - ported from C++ SnakeGame.cpp
 // Grid: 20x21 cells, 20px per cell, 8-direction movement, wall wrapping
 

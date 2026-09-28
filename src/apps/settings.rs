@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Settings app - WiFi config with T9 keyboard input
 
 use embedded_graphics::pixelcolor::Rgb565;

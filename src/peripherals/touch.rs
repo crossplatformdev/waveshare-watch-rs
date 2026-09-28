@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // FT3168 Touch Controller driver
 // Reference: Arduino_FT3x68.h - I2C address 0x38
 

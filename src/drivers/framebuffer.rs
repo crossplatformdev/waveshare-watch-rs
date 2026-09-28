@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // PSRAM Framebuffer for CO5300 display
 // 410x502 RGB565 = 411,640 bytes (~402KB)
 // Draws to RAM, then flushes entire screen via DMA QSPI

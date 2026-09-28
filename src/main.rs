@@ -13,7 +13,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use embedded_graphics_core::prelude::RawData;
 use embedded_hal_bus::i2c::RefCellDevice;
 use esp_alloc as _;
 use esp_backtrace as _;
@@ -29,7 +28,6 @@ use esp_hal::dma_buffers;
 // use esp_hal::i2s::master::{I2s, Config as I2sConfig, DataFormat}; // TODO: wire I2S
 use esp_hal::gpio::{InputConfig, Level, Output, OutputConfig, Pull, Input};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
-use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::spi::Mode as SpiMode;
 use esp_hal::time::Rate;
@@ -43,7 +41,7 @@ use crate::drivers::qspi_bus::QspiBus;
 use crate::peripherals::power::Axp2101Power;
 use crate::peripherals::power_stats::{DisplayState, PowerStats, WifiMode};
 use crate::peripherals::touch::{Ft3168Touch, SwipeDirection};
-use crate::peripherals::rtc::{Pcf85063aRtc, DateTime};
+use crate::peripherals::rtc::Pcf85063aRtc;
 use crate::peripherals::imu::Qmi8658Imu;
 use crate::ui::watchface::WatchFace;
 use crate::ui::pages::{self, Page};
@@ -306,8 +304,7 @@ async fn main(_spawner: Spawner) {
 
     use embedded_hal_bus::spi::ExclusiveDevice;
     let sd_spi_dev = ExclusiveDevice::new_no_delay(sd_spi, sd_cs).unwrap();
-    let mut sd_card = embedded_sdmmc::SdCard::new(sd_spi_dev, delay);
-    let mut sd_ok = false;
+    let sd_card = embedded_sdmmc::SdCard::new(sd_spi_dev, delay);
     let mut mp3_files: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
     match sd_card.num_bytes() {
         Ok(size) => {
@@ -338,7 +335,6 @@ async fn main(_spawner: Spawner) {
                         });
                         println!("[SD] {} files found", mp3_files.len());
                         let _ = volume_mgr.close_dir(mp3_dir);
-                        sd_ok = true;
                     } else {
                         // Try lowercase
                         if let Ok(mp3_dir) = volume_mgr.open_dir(root_dir, "mp3") {
@@ -354,7 +350,6 @@ async fn main(_spawner: Spawner) {
                             });
                             println!("[SD] {} files found", mp3_files.len());
                             let _ = volume_mgr.close_dir(mp3_dir);
-                            sd_ok = true;
                         } else {
                             println!("[SD] No /mp3/ or /MP3/ folder");
                         }
@@ -1174,15 +1169,18 @@ async fn main(_spawner: Spawner) {
                             if snake_game.score() > prev_score {
                                 // Unmute codec, then raise PA amplifier, then play
                                 if audio_codec.is_initialized() {
+                                    let beep_data = &beep_buf[..beep_len];
                                     let _ = audio_codec.unmute();
                                     delay.delay_millis(2); // let codec stabilize before enabling amp
                                     pa_en.set_high();
-                                    if let Ok(transfer) = i2s_tx.write_dma(&beep_buf[..beep_len]) {
+                                    if let Ok(transfer) = i2s_tx.write_dma(&beep_data) {
                                         let _ = transfer.wait();
                                     }
                                     // Lower amp FIRST, then mute codec to avoid pop
                                     pa_en.set_low();
                                     let _ = audio_codec.mute();
+                                } else {
+                                    pa_en.set_low();
                                 }
                             }
                         }
@@ -1331,9 +1329,6 @@ async fn main(_spawner: Spawner) {
                 }
             }
 
-            _ => {
-                app_state = AppState::Watchface;
-            }
         }
     }
 }

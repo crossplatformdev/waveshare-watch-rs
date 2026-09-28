@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // WiFi module - async connection + NTP time sync
 // Uses esp-radio + embassy-net
 

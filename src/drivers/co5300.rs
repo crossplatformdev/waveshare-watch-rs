@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // CO5300 AMOLED display driver
 // Translated from Arduino_CO5300.h/.cpp
 // Resolution: 410x502, col_offset=22, RGB565

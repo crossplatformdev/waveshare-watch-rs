@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // ES8311 Audio codec - proper init from Waveshare C reference
 // + I2S DMA playback via public write_dma()
 

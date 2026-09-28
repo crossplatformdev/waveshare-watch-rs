@@ -5,16 +5,11 @@ use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use embedded_graphics::text::{Alignment, Text};
 
 use crate::board;
-use crate::drivers::co5300::DisplayError;
 
 const W: u16 = board::LCD_WIDTH;
-const H: u16 = board::LCD_HEIGHT;
-const ANIM_STEPS: u16 = 8; // Number of animation frames
-
 #[derive(Clone, Copy, PartialEq)]
 pub enum Page {
     Clock = 0,
@@ -24,8 +19,6 @@ pub enum Page {
 }
 
 impl Page {
-    pub fn count() -> usize { 4 }
-
     pub fn next(self) -> Self {
         match self {
             Page::Clock => Page::Sensors,
@@ -49,14 +42,6 @@ impl Page {
         Rgb565::BLACK
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Page::Clock => "CLOCK",
-            Page::Sensors => "SENSORS",
-            Page::System => "SYSTEM",
-            Page::Power => "POWER",
-        }
-    }
 }
 
 /// Draw the sensors page content.
@@ -104,7 +89,7 @@ pub fn draw_sensors_page<D: DrawTarget<Color = Rgb565>>(
 /// Draw the system info page.
 pub fn draw_system_page<D: DrawTarget<Color = Rgb565>>(
     display: &mut D,
-    batt_mv: u16, batt_pct: u8, charging: bool,
+    batt_mv: u16, _batt_pct: u8, charging: bool,
 ) -> Result<(), D::Error> {
     let cx = W as i32 / 2;
     let cyan = MonoTextStyle::new(&FONT_10X20, Rgb565::CYAN);

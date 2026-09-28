@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AppLifecycle {
     Foreground,

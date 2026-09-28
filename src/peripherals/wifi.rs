@@ -11,6 +11,9 @@
 // WiFi will be initialized on-demand (from Settings page)
 // not at boot, to save power and memory.
 
+use crate::peripherals::settings_store::StoredWifiConfig;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WifiConfig {
     pub ssid: [u8; 32],
     pub ssid_len: usize,
@@ -42,6 +45,23 @@ impl WifiConfig {
 
     pub fn ssid_str(&self) -> &str {
         core::str::from_utf8(&self.ssid[..self.ssid_len]).unwrap_or("")
+    }
+
+    pub fn password_str(&self) -> &str {
+        core::str::from_utf8(&self.password[..self.pass_len]).unwrap_or("")
+    }
+
+    pub fn to_stored(&self) -> StoredWifiConfig {
+        StoredWifiConfig::new(self.ssid_str(), self.password_str())
+    }
+
+    pub fn from_stored(stored: StoredWifiConfig) -> Self {
+        Self {
+            ssid: stored.ssid,
+            ssid_len: stored.ssid_len,
+            password: stored.password,
+            pass_len: stored.pass_len,
+        }
     }
 }
 

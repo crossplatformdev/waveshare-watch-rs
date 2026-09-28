@@ -1,5 +1,6 @@
 pub mod power;
 pub mod power_stats;
+pub mod settings_store;
 pub mod touch;
 pub mod rtc;
 pub mod imu;

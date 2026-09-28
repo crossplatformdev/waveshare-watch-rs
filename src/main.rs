@@ -617,16 +617,6 @@ async fn main(_spawner: Spawner) {
     use esp_radio::wifi::{ModeConfig, ClientConfig, AuthMethod};
     let wifi_ssid = option_env!("WIFI_SSID").unwrap_or("");
     let wifi_pass = option_env!("WIFI_PASS").unwrap_or("");
-    let wifi_has_creds = !wifi_ssid.is_empty();
-    if !wifi_has_creds {
-        println!("[WIFI] No SSID configured — WiFi disabled");
-    }
-    let client_config = ClientConfig::default()
-        .with_ssid(alloc::string::String::from(wifi_ssid))
-        .with_password(alloc::string::String::from(wifi_pass))
-        .with_auth_method(if wifi_pass.is_empty() { AuthMethod::None } else { AuthMethod::WpaWpa2Personal });
-    let mode_config = ModeConfig::Client(client_config);
-    wifi_controller.set_config(&mode_config).expect("WiFi config failed");
     // NOTE: we do NOT call wifi_controller.start() here. The radio stays
     // fully idle until the user taps the WiFi button.
 
@@ -677,6 +667,10 @@ async fn main(_spawner: Spawner) {
     let mut maze_game = MazeGame::new();
     let mut launcher = Launcher::new();
     let mut settings_app = SettingsApp::new();
+    if !wifi_ssid.is_empty() {
+        settings_app.wifi_config.set_ssid(wifi_ssid);
+        settings_app.wifi_config.set_password(wifi_pass);
+    }
     let mut mp3_player = Mp3Player::new();
     let mut smarthome_app = SmartHomeApp::new();
     if !mp3_files.is_empty() {
@@ -1086,6 +1080,34 @@ async fn main(_spawner: Spawner) {
         // An "auto-off after 5 minutes idle" safety net is kept so that if
         // the user leaves WiFi enabled and wanders off, the radio drops on
         // its own. Turning it back on is manual — intentional.
+        if settings_app.wifi_state == crate::peripherals::wifi::WifiState::Connecting
+            && !wifi_on_request
+            && !wifi_connected
+        {
+            let ssid = settings_app.wifi_config.ssid_str();
+            if !ssid.is_empty()
+                && {
+                    let password = settings_app.wifi_config.password_str();
+                    let client_config = ClientConfig::default()
+                        .with_ssid(alloc::string::String::from(ssid))
+                        .with_password(alloc::string::String::from(password))
+                        .with_auth_method(if password.is_empty() { AuthMethod::None } else { AuthMethod::WpaWpa2Personal });
+                    let mode_config = ModeConfig::Client(client_config);
+                    wifi_controller.set_config(&mode_config).is_ok()
+                }
+            {
+                wifi_on_request = true;
+                last_wifi_policy_change = now;
+            } else {
+                if ssid.is_empty() {
+                    println!("[WIFI] No SSID configured — WiFi disabled");
+                } else {
+                    println!("[WIFI] Config failed");
+                }
+                settings_app.wifi_state = crate::peripherals::wifi::WifiState::Error;
+            }
+        }
+
         // Debounce the WiFi button: ignore rapid re-taps within 1 s.
         if wifi_toggle_request
             && (now - last_wifi_policy_change).as_millis() >= WIRELESS_TOGGLE_DEBOUNCE_MS
@@ -1093,6 +1115,32 @@ async fn main(_spawner: Spawner) {
             wifi_on_request = !wifi_on_request;
             wifi_toggle_request = false;
             last_wifi_policy_change = now;
+            if wifi_on_request {
+                let ssid = settings_app.wifi_config.ssid_str();
+                if !ssid.is_empty()
+                    && {
+                        let password = settings_app.wifi_config.password_str();
+                        let client_config = ClientConfig::default()
+                            .with_ssid(alloc::string::String::from(ssid))
+                            .with_password(alloc::string::String::from(password))
+                            .with_auth_method(if password.is_empty() { AuthMethod::None } else { AuthMethod::WpaWpa2Personal });
+                        let mode_config = ModeConfig::Client(client_config);
+                        wifi_controller.set_config(&mode_config).is_ok()
+                    }
+                {
+                    settings_app.wifi_state = crate::peripherals::wifi::WifiState::Connecting;
+                } else {
+                    if ssid.is_empty() {
+                        println!("[WIFI] No SSID configured — WiFi disabled");
+                    } else {
+                        println!("[WIFI] Config failed");
+                    }
+                    wifi_on_request = false;
+                    settings_app.wifi_state = crate::peripherals::wifi::WifiState::Error;
+                }
+            } else {
+                settings_app.wifi_state = crate::peripherals::wifi::WifiState::Disconnected;
+            }
             println!("[WIFI] User toggled → {}", if wifi_on_request { "ON" } else { "OFF" });
         } else if wifi_toggle_request {
             wifi_toggle_request = false; // swallow the bounce
@@ -1114,6 +1162,7 @@ async fn main(_spawner: Spawner) {
                     Ok(Ok(())) => {
                         println!("[WIFI] Connected (PS=MaxModem)");
                         wifi_connected = true;
+                        settings_app.wifi_state = crate::peripherals::wifi::WifiState::Connected;
                         watchface.wifi_connected = true;
                         watchface.force_redraw();
                         page_dirty = true;
@@ -1135,6 +1184,7 @@ async fn main(_spawner: Spawner) {
                         // Timeout or error — back off instead of hammering.
                         println!("[WIFI] Connect failed/timeout");
                         wifi_on_request = false;
+                        settings_app.wifi_state = crate::peripherals::wifi::WifiState::Error;
                         watchface.wifi_connected = false;
                         watchface.force_redraw();
                         page_dirty = true;
@@ -1147,6 +1197,7 @@ async fn main(_spawner: Spawner) {
             let _ = wifi_controller.disconnect_async().await;
             println!("[WIFI] Disconnected");
             wifi_connected = false;
+            settings_app.wifi_state = crate::peripherals::wifi::WifiState::Disconnected;
             watchface.wifi_connected = false;
             let _ = wifi_controller.stop();
             wifi_started = false;

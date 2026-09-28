@@ -10,6 +10,7 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::geometry::Point as EgPoint;
 
+use crate::peripherals::settings_store::TransactionalSettings;
 use crate::peripherals::wifi::{WifiConfig, WifiState};
 use crate::ui::t9_keyboard::T9Keyboard;
 
@@ -30,8 +31,16 @@ pub struct SettingsApp {
 
 impl SettingsApp {
     pub fn new() -> Self {
+        Self::from_storage(TransactionalSettings::new())
+    }
+
+    pub fn from_storage(storage: TransactionalSettings) -> Self {
+        let wifi_config = storage
+            .recover()
+            .map(WifiConfig::from_stored)
+            .unwrap_or_else(WifiConfig::new);
         Self {
-            wifi_config: WifiConfig::new(),
+            wifi_config,
             wifi_state: WifiState::Disconnected,
             keyboard: T9Keyboard::new(),
             active_field: SettingsField::Ssid,

@@ -40,10 +40,11 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 
 - `main.rs` is the central owner of hardware and policy; hardware APIs are not isolated behind system services, though some power/resource decisions are now named policy helpers instead of open-coded conditions.
 - Error results are frequently ignored or converted to defaults in initialization and the event loop.
-- There is no app isolation, capability model, resource lease manager, transactional app install, OTA flow, simulator, or host test suite in the baseline.
+- There is no app isolation, capability model, transactional app install, OTA flow, or simulator in the baseline. A narrow M8 slice now adds a transactional two-slot settings record with standalone host-side fault-injection tests, but it is not yet backed by persistent flash or app-install storage.
 - The present M4 slice establishes only a coarse core policy (UI/event loop plus active services on core 0; secondary executor reserved on core 1). It does not yet migrate more application work to core 1 or include broader latency instrumentation, load balancing, or application-level affinity controls.
 - The present M6 slice is limited to watchface invalidation-driven partial flushes; most other pages and app renders still redraw whole frames.
 - The present M7 slice centralizes only a narrow subset of navigation policy (watchface launch gestures and BOOT-as-Back targets); broader gesture routing and power-button policy are still inline in `main.rs`.
+- The present M8 slice covers only the settings-record format and recovery logic; persistent media integration and broader app-data storage are still pending.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

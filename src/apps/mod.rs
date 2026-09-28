@@ -32,6 +32,32 @@ pub enum AppLifecycle {
     Foreground,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct AppCapabilities(u16);
+
+impl AppCapabilities {
+    pub const NONE: Self = Self(0);
+    pub const TOUCH: Self = Self(1 << 0);
+    pub const MOTION: Self = Self(1 << 1);
+    pub const NETWORK: Self = Self(1 << 2);
+    pub const AUDIO: Self = Self(1 << 3);
+    pub const STORAGE: Self = Self(1 << 4);
+
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct AppSandboxPolicy {
+    pub tick_ms: u16,
+    pub capabilities: AppCapabilities,
+}
+
 /// Result of an app update
 pub enum AppResult {
     Continue,
@@ -72,6 +98,7 @@ pub struct AppManifest {
     pub display_name: &'static str,
     pub api_version: u16,
     pub lifecycle: AppLifecycle,
+    pub sandbox: AppSandboxPolicy,
 }
 
 pub const APP_MANIFESTS: [AppManifest; 8] = [
@@ -81,6 +108,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Snake",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 33,
+            capabilities: AppCapabilities::AUDIO,
+        },
     },
     AppManifest {
         state: AppState::Game2048,
@@ -88,6 +119,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "2048",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 33,
+            capabilities: AppCapabilities::NONE,
+        },
     },
     AppManifest {
         state: AppState::Tetris,
@@ -95,6 +130,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Tetris",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 33,
+            capabilities: AppCapabilities::NONE,
+        },
     },
     AppManifest {
         state: AppState::Flappy,
@@ -102,6 +141,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Flappy Bird",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 33,
+            capabilities: AppCapabilities::TOUCH,
+        },
     },
     AppManifest {
         state: AppState::Maze,
@@ -109,6 +152,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Maze (Tilt)",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 33,
+            capabilities: AppCapabilities::MOTION,
+        },
     },
     AppManifest {
         state: AppState::Mp3Player,
@@ -116,6 +163,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "MP3 Player",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 200,
+            capabilities: AppCapabilities::AUDIO.union(AppCapabilities::STORAGE),
+        },
     },
     AppManifest {
         state: AppState::SmartHome,
@@ -123,6 +174,10 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Smart Home",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 100,
+            capabilities: AppCapabilities::NETWORK,
+        },
     },
     AppManifest {
         state: AppState::Settings,
@@ -130,9 +185,19 @@ pub const APP_MANIFESTS: [AppManifest; 8] = [
         display_name: "Settings",
         api_version: APP_API_VERSION,
         lifecycle: AppLifecycle::Foreground,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 50,
+            capabilities: AppCapabilities::NETWORK,
+        },
     },
 ];
 
 pub fn app_manifest(state: AppState) -> Option<&'static AppManifest> {
     APP_MANIFESTS.iter().find(|manifest| manifest.state == state)
+}
+
+pub fn app_supports(state: AppState, capability: AppCapabilities) -> bool {
+    app_manifest(state)
+        .map(|manifest| manifest.sandbox.capabilities.contains(capability))
+        .unwrap_or(false)
 }

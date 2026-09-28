@@ -48,13 +48,13 @@ use crate::drivers::framebuffer::Framebuffer;
 use crate::drivers::qspi_bus::QspiBus;
 use crate::peripherals::power::Axp2101Power;
 use crate::peripherals::power_stats::{DisplayState, PowerStats, WifiMode};
-use crate::peripherals::touch::{Ft3168Touch, SwipeDirection};
+use crate::peripherals::touch::{Ft3168Touch, SwipeDirection, TouchPoint};
 use crate::peripherals::rtc::Pcf85063aRtc;
 use crate::peripherals::imu::Qmi8658Imu;
 use crate::ui::watchface::WatchFace;
 use crate::ui::pages::{self, Page};
 use crate::ui::power_page;
-use crate::apps::{app_manifest, App, AppInput, AppLifecycle, APP_API_VERSION, AppResult, AppState};
+use crate::apps::{app_manifest, app_supports, App, AppCapabilities, AppInput, AppLifecycle, APP_API_VERSION, AppResult, AppState};
 use crate::apps::snake::SnakeGame;
 use crate::apps::game2048::Game2048;
 use crate::apps::tetris::TetrisGame;
@@ -165,6 +165,35 @@ fn apply_navigation_target(
     if target == AppState::Watchface {
         watchface.force_redraw();
         *page_dirty = true;
+    }
+}
+
+fn app_tick_budget(state: AppState) -> Option<Duration> {
+    app_manifest(state).map(|manifest| Duration::from_millis(manifest.sandbox.tick_ms as u64))
+}
+
+fn sandboxed_app_input(
+    state: AppState,
+    touch: Option<TouchPoint>,
+    swipe: Option<SwipeDirection>,
+    tap: bool,
+    accel: (f32, f32, f32),
+    dt_ms: u32,
+) -> AppInput {
+    AppInput {
+        touch: if app_supports(state, AppCapabilities::TOUCH) {
+            touch
+        } else {
+            None
+        },
+        swipe,
+        tap,
+        accel: if app_supports(state, AppCapabilities::MOTION) {
+            accel
+        } else {
+            (0.0, 0.0, 0.0)
+        },
+        dt_ms,
     }
 }
 
@@ -832,14 +861,11 @@ async fn main(_spawner: Spawner) {
                     // changes, slow enough not to skew the measurement.
                     Page::Power   => Duration::from_secs(1),
                 },
-                AppState::Launcher | AppState::Settings | AppState::Mp3Player
-                | AppState::SmartHome => Duration::from_millis(100),
+                AppState::Launcher => Duration::from_millis(100),
                 // Flappy previously ran at 8 ms (~125 Hz). The panel can't
                 // even display that (VSync is ~33 ms) so the extra ticks
                 // just burned CPU and DMA for no visible benefit.
-                AppState::Flappy => Duration::from_millis(33),
-                AppState::Snake | AppState::Game2048 | AppState::Tetris
-                | AppState::Maze => Duration::from_millis(33),
+                state => app_tick_budget(state).unwrap_or(Duration::from_millis(100)),
             }
         };
         power_stats.last_tick_ms = tick.as_millis().min(u16::MAX as u64) as u16;
@@ -1112,6 +1138,7 @@ async fn main(_spawner: Spawner) {
         // the user leaves WiFi enabled and wanders off, the radio drops on
         // its own. Turning it back on is manual — intentional.
         if settings_app.wifi_state == crate::peripherals::wifi::WifiState::Connecting
+            && app_supports(AppState::Settings, AppCapabilities::NETWORK)
             && !wifi_on_request
             && !wifi_connected
         {
@@ -1147,26 +1174,32 @@ async fn main(_spawner: Spawner) {
             wifi_toggle_request = false;
             last_wifi_policy_change = now;
             if wifi_on_request {
-                let ssid = settings_app.wifi_config.ssid_str();
-                if !ssid.is_empty()
-                    && {
-                        let password = settings_app.wifi_config.password_str();
-                        let client_config = ClientConfig::default()
-                            .with_ssid(alloc::string::String::from(ssid))
-                            .with_password(alloc::string::String::from(password))
-                            .with_auth_method(if password.is_empty() { AuthMethod::None } else { AuthMethod::WpaWpa2Personal });
-                        let mode_config = ModeConfig::Client(client_config);
-                        wifi_controller.set_config(&mode_config).is_ok()
-                    }
-                {
-                    settings_app.wifi_state = crate::peripherals::wifi::WifiState::Connecting;
-                } else {
-                    if ssid.is_empty() {
-                        println!("[WIFI] No SSID configured — WiFi disabled");
+                if app_supports(AppState::Settings, AppCapabilities::NETWORK) {
+                    let ssid = settings_app.wifi_config.ssid_str();
+                    if !ssid.is_empty()
+                        && {
+                            let password = settings_app.wifi_config.password_str();
+                            let client_config = ClientConfig::default()
+                                .with_ssid(alloc::string::String::from(ssid))
+                                .with_password(alloc::string::String::from(password))
+                                .with_auth_method(if password.is_empty() { AuthMethod::None } else { AuthMethod::WpaWpa2Personal });
+                            let mode_config = ModeConfig::Client(client_config);
+                            wifi_controller.set_config(&mode_config).is_ok()
+                        }
+                    {
+                        settings_app.wifi_state = crate::peripherals::wifi::WifiState::Connecting;
                     } else {
-                        println!("[WIFI] Config failed");
+                        if ssid.is_empty() {
+                            println!("[WIFI] No SSID configured — WiFi disabled");
+                        } else {
+                            println!("[WIFI] Config failed");
+                        }
+                        wifi_on_request = false;
+                        settings_app.wifi_state = crate::peripherals::wifi::WifiState::Error;
                     }
+                } else {
                     wifi_on_request = false;
+                    println!("[WIFI] Settings sandbox blocks network access");
                     settings_app.wifi_state = crate::peripherals::wifi::WifiState::Error;
                 }
             } else {
@@ -1445,13 +1478,7 @@ async fn main(_spawner: Spawner) {
 
             AppState::Snake => {
                 let prev_score = snake_game.score();
-                let input = AppInput {
-                    touch: None,
-                    swipe: swipe_event,
-                    tap: tap_event,
-                    accel,
-                    dt_ms: dt_ms.max(1),
-                };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 match snake_game.update(&input) {
                     AppResult::Continue => {
                         if snake_game.stepped() {
@@ -1460,7 +1487,9 @@ async fn main(_spawner: Spawner) {
                             // Beep when food eaten via I2S DMA
                             if snake_game.score() > prev_score {
                                 // Unmute codec, then raise PA amplifier, then play
-                                if audio_codec.is_initialized() {
+                                if app_supports(app_state, AppCapabilities::AUDIO)
+                                    && audio_codec.is_initialized()
+                                {
                                     let beep_data = &beep_buf[..beep_len];
                                     let _ = audio_codec.unmute();
                                     delay.delay_millis(2); // let codec stabilize before enabling amp
@@ -1534,7 +1563,7 @@ async fn main(_spawner: Spawner) {
             }
 
             AppState::Game2048 => {
-                let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 game_2048.update(&input);
                 // Only render on input (swipe moves tiles)
                 if swipe_event.is_some() {
@@ -1549,7 +1578,7 @@ async fn main(_spawner: Spawner) {
             }
 
             AppState::Tetris => {
-                let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 tetris_game.update(&input);
                 if tetris_game.stepped() || swipe_event.is_some() || tap_event {
                     tetris_game.render(&mut fb);
@@ -1566,7 +1595,7 @@ async fn main(_spawner: Spawner) {
                 // Touch via GPIO38 (instant)
                 let touch_down = touch_int.is_low();
                 let fake_touch = if touch_down { Some(crate::peripherals::touch::TouchPoint { x: 200, y: 250, fingers: 1 }) } else { None };
-                let input = AppInput { touch: fake_touch, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, fake_touch, swipe_event, tap_event, accel, dt_ms.max(1));
                 flappy_game.update(&input);
                 // Double-buffered render: draw to fb, swap+flush with VSync
                 flappy_game.render(&mut fb);
@@ -1582,7 +1611,7 @@ async fn main(_spawner: Spawner) {
             }
 
             AppState::Maze => {
-                let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 maze_game.update(&input);
                 // Maze renders at 30fps (IMU continuous)
                 if now >= next_watchface_flush {
@@ -1603,10 +1632,12 @@ async fn main(_spawner: Spawner) {
                     let response_text = core::str::from_utf8(&response.response[..response.response_len]).unwrap_or("ERR");
                     smarthome_app.set_response(response.idx, response_text, response.success);
                 }
-                let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 smarthome_app.update(&input);
                 if let Some((idx, method, url)) = smarthome_app.get_pending_request() {
-                    if smarthome_request_in_flight {
+                    if !app_supports(app_state, AppCapabilities::NETWORK) {
+                        smarthome_app.set_response(idx, "SANDBOX", false);
+                    } else if smarthome_request_in_flight {
                         smarthome_app.set_response(idx, "BUSY", false);
                     } else if wifi_connected {
                         let mut request = SmartHomeRequest {
@@ -1638,7 +1669,7 @@ async fn main(_spawner: Spawner) {
             }
 
             AppState::Mp3Player => {
-                let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
                 mp3_player.update(&input);
                 mp3_player.render(&mut fb);
                 if now >= next_watchface_flush {

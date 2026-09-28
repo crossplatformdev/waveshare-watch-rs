@@ -25,7 +25,7 @@ The same I2C peripheral is shared using `RefCell` and `RefCellDevice`. The displ
 
 `main` initializes the HAL at 160 MHz, internal and PSRAM allocators, RTOS timer, software interrupts, buses, display, sensors, storage/audio interfaces, and radio objects. It allocates a two-buffer display framebuffer and two full-frame swipe snapshots. An adaptive `select3` wait races a timer against falling-edge waits on touch and BOOT, after which the core-0 main task samples services and runs application logic. Core 1 now hosts a second Embassy executor that publishes a heartbeat used by the power diagnostics instead of leaving the secondary core unused.
 
-The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path. The firmware now records the current sleep budget and worst observed wake-latency slip in `PowerStats` for on-device inspection, and it uses explicit runtime policy helpers for IMU leases and wireless idle auto-off.
+The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path. The firmware now records the current sleep budget and worst observed wake-latency slip in `PowerStats` for on-device inspection, and it uses explicit runtime policy helpers for IMU leases, wireless idle auto-off, and BOOT/watchface navigation targets.
 
 Most screen changes still transmit the complete framebuffer. The clock watchface now carries dirty-region metadata through `WatchFace::render()` and uses `Framebuffer::flush_region` for incremental time/battery/gyro updates, but the broader UI does not yet use a general dirty-region compositor. TE synchronization is a bounded GPIO level loop, not an interrupt/event wait.
 
@@ -43,6 +43,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 - There is no app isolation, capability model, resource lease manager, transactional app install, OTA flow, simulator, or host test suite in the baseline.
 - The present M4 slice establishes only a coarse core policy (UI/event loop plus active services on core 0; secondary executor reserved on core 1). It does not yet migrate more application work to core 1 or include broader latency instrumentation, load balancing, or application-level affinity controls.
 - The present M6 slice is limited to watchface invalidation-driven partial flushes; most other pages and app renders still redraw whole frames.
+- The present M7 slice centralizes only a narrow subset of navigation policy (watchface launch gestures and BOOT-as-Back targets); broader gesture routing and power-button policy are still inline in `main.rs`.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

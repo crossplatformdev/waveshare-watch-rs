@@ -99,6 +99,7 @@ static CORE1_HEARTBEAT_MS: AtomicU32 = AtomicU32::new(0);
 const WIRELESS_TOGGLE_DEBOUNCE_MS: u64 = 1_000;
 const WIRELESS_IDLE_AUTO_OFF_SECS: u64 = 300;
 const WIRELESS_IDLE_RECHECK_SECS: u64 = 60;
+const NAV_BUTTON_DEBOUNCE_MS: u64 = 200;
 
 fn now_ms() -> u32 { Instant::now().as_millis() as u32 }
 
@@ -119,6 +120,48 @@ fn imu_lease_active(
             || app_state == AppState::Tetris
             || app_state == AppState::Flappy
             || (app_state == AppState::Watchface && current_page == Page::Sensors))
+}
+
+fn watchface_navigation_target(
+    current_page: Page,
+    swipe_event: Option<SwipeDirection>,
+    apps_tapped: bool,
+    boot_pressed: bool,
+) -> Option<AppState> {
+    if apps_tapped || boot_pressed {
+        Some(AppState::Launcher)
+    } else if current_page == Page::Clock && matches!(swipe_event, Some(SwipeDirection::Up)) {
+        Some(AppState::Launcher)
+    } else {
+        None
+    }
+}
+
+fn boot_back_target(app_state: AppState) -> AppState {
+    match app_state {
+        AppState::Watchface => AppState::Launcher,
+        AppState::Launcher | AppState::Snake => AppState::Watchface,
+        AppState::Game2048
+        | AppState::Tetris
+        | AppState::Flappy
+        | AppState::Maze
+        | AppState::Mp3Player
+        | AppState::SmartHome
+        | AppState::Settings => AppState::Launcher,
+    }
+}
+
+fn apply_navigation_target(
+    app_state: &mut AppState,
+    target: AppState,
+    watchface: &mut WatchFace,
+    page_dirty: &mut bool,
+) {
+    *app_state = target;
+    if target == AppState::Watchface {
+        watchface.force_redraw();
+        *page_dirty = true;
+    }
 }
 
 #[embassy_executor::task]
@@ -1282,8 +1325,13 @@ async fn main(_spawner: Spawner) {
                             watchface.force_redraw();
                             page_dirty = true;
                         // Apps launcher
-                        } else if WatchFace::is_apps_zone(last_touch_x, last_touch_y) {
-                            app_state = AppState::Launcher;
+                        } else if let Some(target) = watchface_navigation_target(
+                            current_page,
+                            swipe_event,
+                            WatchFace::is_apps_zone(last_touch_x, last_touch_y),
+                            false,
+                        ) {
+                            apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
                         // Gyro toggle
                         } else if WatchFace::is_gyro_zone(last_touch_y) {
                             let enabled = watchface.toggle_gyro();
@@ -1300,15 +1348,16 @@ async fn main(_spawner: Spawner) {
                     }
                 }
 
-                // Swipe up on Clock → launcher, boot button too
-                if let Some(SwipeDirection::Up) = swipe_event {
-                    if current_page == Page::Clock {
-                        app_state = AppState::Launcher;
+                if let Some(target) = watchface_navigation_target(
+                    current_page,
+                    swipe_event,
+                    false,
+                    boot_button.is_low(),
+                ) {
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    if boot_button.is_low() {
+                        Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                     }
-                }
-                if boot_button.is_low() {
-                    app_state = AppState::Launcher;
-                    Timer::after(Duration::from_millis(200)).await;
                 }
             }
 
@@ -1354,10 +1403,9 @@ async fn main(_spawner: Spawner) {
                 }
 
                 if boot_button.is_low() {
-                    app_state = AppState::Watchface;
-                    watchface.force_redraw();
-                    page_dirty = true;
-                    Timer::after(Duration::from_millis(200)).await;
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 
@@ -1377,7 +1425,12 @@ async fn main(_spawner: Spawner) {
                         AppState::Mp3Player => mp3_player.setup(),
                         AppState::SmartHome => smarthome_app.setup(),
                         AppState::Settings => {}
-                        AppState::Watchface => { watchface.force_redraw(); page_dirty = true; }
+                        AppState::Watchface => apply_navigation_target(
+                            &mut app_state,
+                            AppState::Watchface,
+                            &mut watchface,
+                            &mut page_dirty,
+                        ),
                         _ => {}
                     }
                 } else {
@@ -1385,10 +1438,9 @@ async fn main(_spawner: Spawner) {
                     fb.flush(&mut display);
                 }
                 if boot_button.is_low() {
-                    app_state = AppState::Watchface;
-                    watchface.force_redraw();
-                    page_dirty = true;
-                    Timer::after(Duration::from_millis(200)).await;
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 
@@ -1400,7 +1452,11 @@ async fn main(_spawner: Spawner) {
                     game_2048.render(&mut fb);
                     fb.flush_vsync(&mut display, &te_pin);
                 }
-                if boot_button.is_low() { app_state = AppState::Launcher; Timer::after(Duration::from_millis(200)).await; }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
             }
 
             AppState::Tetris => {
@@ -1410,7 +1466,11 @@ async fn main(_spawner: Spawner) {
                     tetris_game.render(&mut fb);
                     fb.flush_vsync(&mut display, &te_pin);
                 }
-                if boot_button.is_low() { app_state = AppState::Launcher; Timer::after(Duration::from_millis(200)).await; }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
             }
 
             AppState::Flappy => {
@@ -1426,9 +1486,9 @@ async fn main(_spawner: Spawner) {
                     next_watchface_flush = now + Duration::from_millis(33);
                 }
                 if boot_button.is_low() {
-                    app_state = AppState::Launcher;
-                    page_dirty = true;
-                    Timer::after(Duration::from_millis(200)).await;
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 
@@ -1441,7 +1501,11 @@ async fn main(_spawner: Spawner) {
                     fb.flush_vsync(&mut display, &te_pin);
                     next_watchface_flush = now + Duration::from_millis(33);
                 }
-                if boot_button.is_low() { app_state = AppState::Launcher; Timer::after(Duration::from_millis(200)).await; }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
             }
 
             AppState::SmartHome => {
@@ -1477,7 +1541,11 @@ async fn main(_spawner: Spawner) {
                     fb.flush_vsync(&mut display, &te_pin);
                     next_watchface_flush = now + Duration::from_millis(100);
                 }
-                if boot_button.is_low() { app_state = AppState::Launcher; Timer::after(Duration::from_millis(200)).await; }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
             }
 
             AppState::Mp3Player => {
@@ -1488,7 +1556,11 @@ async fn main(_spawner: Spawner) {
                     fb.flush_vsync(&mut display, &te_pin);
                     next_watchface_flush = now + Duration::from_millis(200);
                 }
-                if boot_button.is_low() { app_state = AppState::Launcher; Timer::after(Duration::from_millis(200)).await; }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
             }
 
             AppState::Settings => {
@@ -1508,8 +1580,9 @@ async fn main(_spawner: Spawner) {
                     next_watchface_flush = now + Duration::from_millis(50);
                 }
                 if boot_button.is_low() {
-                    app_state = AppState::Launcher;
-                    Timer::after(Duration::from_millis(200)).await;
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
                 }
             }
 

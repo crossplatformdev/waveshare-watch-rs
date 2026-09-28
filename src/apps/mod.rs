@@ -25,6 +25,13 @@ pub struct AppInput {
     pub dt_ms: u32, // milliseconds since last frame
 }
 
+pub const APP_API_VERSION: u16 = 1;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AppLifecycle {
+    Foreground,
+}
+
 /// Result of an app update
 pub enum AppResult {
     Continue,
@@ -34,7 +41,11 @@ pub enum AppResult {
 /// Common trait for all apps/games
 pub trait App {
     fn name(&self) -> &str;
+    fn api_version(&self) -> u16 { APP_API_VERSION }
+    fn lifecycle(&self) -> AppLifecycle { AppLifecycle::Foreground }
     fn setup(&mut self);
+    fn enter(&mut self) { self.setup(); }
+    fn exit(&mut self) {}
     fn update(&mut self, input: &AppInput) -> AppResult;
     fn render<D: DrawTarget<Color = Rgb565>>(&self, d: &mut D);
 }
@@ -52,4 +63,76 @@ pub enum AppState {
     Mp3Player,
     SmartHome,
     Settings,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AppManifest {
+    pub state: AppState,
+    pub app_id: &'static str,
+    pub display_name: &'static str,
+    pub api_version: u16,
+    pub lifecycle: AppLifecycle,
+}
+
+pub const APP_MANIFESTS: [AppManifest; 8] = [
+    AppManifest {
+        state: AppState::Snake,
+        app_id: "snake",
+        display_name: "Snake",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Game2048,
+        app_id: "game-2048",
+        display_name: "2048",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Tetris,
+        app_id: "tetris",
+        display_name: "Tetris",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Flappy,
+        app_id: "flappy-bird",
+        display_name: "Flappy Bird",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Maze,
+        app_id: "maze",
+        display_name: "Maze (Tilt)",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Mp3Player,
+        app_id: "mp3-player",
+        display_name: "MP3 Player",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::SmartHome,
+        app_id: "smart-home",
+        display_name: "Smart Home",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+    AppManifest {
+        state: AppState::Settings,
+        app_id: "settings",
+        display_name: "Settings",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+    },
+];
+
+pub fn app_manifest(state: AppState) -> Option<&'static AppManifest> {
+    APP_MANIFESTS.iter().find(|manifest| manifest.state == state)
 }

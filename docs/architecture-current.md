@@ -6,7 +6,7 @@ Baseline source revision: `5eb445bce1222a7ac9045dfb33231bc39b29abc0`
 
 The firmware is one `no_std`, `no_main` Cargo package (`waveshare-watch-rs` 0.4.0), not a workspace. `src/main.rs` owns peripheral initialization, global state, input handling, power/display state transitions, networking orchestration, and application dispatch. The code is asynchronous at the main-loop boundary through `esp-rtos`/Embassy; the applications and rendering are synchronous and run in the same main task.
 
-There is no independent kernel scheduler, application process isolation, inter-core service IPC, or application ABI. App state is selected by a single `AppState` enum and apps receive a frame-oriented `AppInput`.
+There is no independent kernel scheduler, application process isolation, inter-core service IPC, or application ABI. App state is selected by a single `AppState` enum and apps receive a frame-oriented `AppInput`. A narrow M9 slice now adds a central app manifest table with API-version and lifecycle metadata, plus lifecycle entry shims layered over the existing in-process apps.
 
 ## Layers
 
@@ -32,7 +32,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 ## Product functionality represented in code
 
 - Display, touch, RTC, IMU, PMIC battery/status, SD card, speaker-output beep, Wi-Fi connection/NTP, and BLE advertising have code paths.
-- App implementations are statically linked and dispatched in-process.
+- App implementations are statically linked and dispatched in-process. Launcher-visible apps now share a versioned manifest (`src/apps/mod.rs`) that names the app, assigns a stable string ID, and records its lifecycle contract without tying that metadata to board peripherals.
 - The MP3 player is still UI scaffolding only. The SmartHome application now hands bounded HTTP requests to `main.rs`, which owns the network stack and writes short status/response summaries back to the app state; this still does not establish TLS or broader product-level HTTP behavior.
 - Driver structs and board constants do not by themselves establish that a feature is electrically verified or complete; see [hardware-map.md](hardware-map.md) and [known-hardware-errata.md](known-hardware-errata.md).
 
@@ -45,6 +45,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 - The present M6 slice is limited to watchface invalidation-driven partial flushes; most other pages and app renders still redraw whole frames.
 - The present M7 slice centralizes only a narrow subset of navigation policy (watchface launch gestures and BOOT-as-Back targets); broader gesture routing and power-button policy are still inline in `main.rs`.
 - The present M8 slice covers only the settings-record format and recovery logic; persistent media integration and broader app-data storage are still pending.
+- The present M9 slice defines only a versioned foreground-app contract and shared manifest table; `main.rs` still owns hard-coded app instantiation, rendering cadence, and service access.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

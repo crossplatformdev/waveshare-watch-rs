@@ -50,7 +50,7 @@ use crate::peripherals::imu::Qmi8658Imu;
 use crate::ui::watchface::WatchFace;
 use crate::ui::pages::{self, Page};
 use crate::ui::power_page;
-use crate::apps::{App, AppInput, AppResult, AppState};
+use crate::apps::{app_manifest, App, AppInput, AppLifecycle, APP_API_VERSION, AppResult, AppState};
 use crate::apps::snake::SnakeGame;
 use crate::apps::game2048::Game2048;
 use crate::apps::tetris::TetrisGame;
@@ -1466,23 +1466,30 @@ async fn main(_spawner: Spawner) {
                     if let Some(tp) = point { last_touch_y = tp.y; }
                 }
                 if let Some(new_state) = launcher.update(swipe_event, tap_event, last_touch_y) {
-                    app_state = new_state;
-                    match app_state {
-                        AppState::Snake => snake_game.setup(),
-                        AppState::Game2048 => { game_2048.setup(); game_2048.render(&mut fb); fb.flush(&mut display); }
-                        AppState::Tetris => tetris_game.setup(),
-                        AppState::Flappy => flappy_game.setup(),
-                        AppState::Maze => maze_game.setup(),
-                        AppState::Mp3Player => mp3_player.setup(),
-                        AppState::SmartHome => smarthome_app.setup(),
-                        AppState::Settings => {}
-                        AppState::Watchface => apply_navigation_target(
+                    if let Some(manifest) = app_manifest(new_state) {
+                        if manifest.api_version == APP_API_VERSION
+                            && manifest.lifecycle == AppLifecycle::Foreground
+                        {
+                            app_state = new_state;
+                            match app_state {
+                                AppState::Snake => snake_game.enter(),
+                                AppState::Game2048 => { game_2048.enter(); game_2048.render(&mut fb); fb.flush(&mut display); }
+                                AppState::Tetris => tetris_game.enter(),
+                                AppState::Flappy => flappy_game.enter(),
+                                AppState::Maze => maze_game.enter(),
+                                AppState::Mp3Player => mp3_player.enter(),
+                                AppState::SmartHome => smarthome_app.enter(),
+                                AppState::Settings => {}
+                                AppState::Watchface | AppState::Launcher => {}
+                            }
+                        }
+                    } else if new_state == AppState::Watchface {
+                        apply_navigation_target(
                             &mut app_state,
                             AppState::Watchface,
                             &mut watchface,
                             &mut page_dirty,
-                        ),
-                        _ => {}
+                        )
                     }
                 } else {
                     launcher.render(&mut fb);

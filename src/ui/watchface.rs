@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Watchface - renders to any DrawTarget (framebuffer or display)
 
 use embedded_graphics::mono_font::ascii::FONT_10X20;
@@ -92,6 +94,15 @@ pub struct RenderOutcome {
     pub time_region: Option<FlushRegion>,
     pub battery_region: Option<FlushRegion>,
     pub gyro_region: Option<FlushRegion>,
+}
+
+impl RenderOutcome {
+    pub fn dirty_region(&self) -> Option<FlushRegion> {
+        [self.time_region, self.battery_region, self.gyro_region]
+            .into_iter()
+            .flatten()
+            .reduce(|acc, region| acc.union(region))
+    }
 }
 
 pub struct WatchFace {

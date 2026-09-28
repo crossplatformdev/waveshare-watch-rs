@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Snake Game - ported from C++ SnakeGame.cpp
 // Grid: 20x21 cells, 20px per cell, 8-direction movement, wall wrapping
 
@@ -10,7 +12,7 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::text::{Alignment, Text};
 
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
+use crate::app_sdk::SwipeDirection;
 
 const GRID_SIZE: i32 = 20;
 const GRID_W: i32 = 20;

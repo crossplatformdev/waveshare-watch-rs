@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+
 // PCF85063A RTC driver
 // Reference: OLEDS3Watch/components/bsp_extra/src/pcf85063a.c
 // I2C address 0x51, BCD encoded time registers
 
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const PCF85063A_ADDR: u8 = 0x51;
+const PCF85063A_ADDR: u8 = board::RTC_I2C_ADDR;
 
 // Registers
 const REG_CTRL1: u8 = 0x00;

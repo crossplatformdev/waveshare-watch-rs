@@ -1,0 +1,7 @@
+[package]
+name = "wasmi-spike"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasmi = { version = "2.0.0", default-features = false, features = ["std", "portable-dispatch", "prefer-btree-collections", "validate"] }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // PSRAM Framebuffer for CO5300 display
 // 410x502 RGB565 = 411,640 bytes (~402KB)
 // Draws to RAM, then flushes entire screen via DMA QSPI
@@ -131,6 +133,20 @@ impl Framebuffer {
             display.bus_mut().stream_pixels(&self.buf[start..end]);
         }
         display.bus_mut().end_pixels();
+    }
+
+    /// VSync partial flush for watchface invalidation-driven updates.
+    pub fn flush_region_vsync(
+        &self,
+        display: &mut Co5300Display,
+        te: &esp_hal::gpio::Input<'_>,
+        x: u16,
+        y: u16,
+        w: u16,
+        h: u16,
+    ) {
+        for _ in 0..400 { if te.is_high() { break; } }
+        self.flush_region(display, x, y, w, h);
     }
 
     /// Get raw buffer for direct access.

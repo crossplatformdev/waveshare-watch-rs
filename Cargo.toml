@@ -4,6 +4,9 @@ version = "0.4.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[features]
+wasm-spike = ["dep:wasmi"]
+
 [dependencies]
 # ESP HAL + Runtime
 esp-hal = { version = "1.0.0", default-features = true, features = ["esp32s3", "unstable", "psram"] }
@@ -41,6 +44,7 @@ embedded-io-async = "0.6"
 
 # MP3 decoding
 nanomp3 = "0.1"
+wasmi = { version = "2.0.0", default-features = false, features = ["portable-dispatch", "prefer-btree-collections", "validate"], optional = true }
 
 [profile.dev]
 opt-level = "s"

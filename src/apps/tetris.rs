@@ -12,7 +12,7 @@ use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::geometry::Point as EgPoint;
 
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
+use crate::app_sdk::SwipeDirection;
 
 const GW: usize = 12;
 const GH: usize = 16;
@@ -197,7 +197,7 @@ impl App for TetrisGame {
         }
 
         // Gyroscope tilt: move piece left/right
-        let (ax, ay, _) = input.accel;
+        let (_ax, ay, _) = input.accel;
         self.gyro_timer += input.dt_ms;
         if self.gyro_timer >= GYRO_MOVE_MS {
             self.gyro_timer -= GYRO_MOVE_MS;

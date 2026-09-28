@@ -1,9 +1,12 @@
+#![allow(dead_code)]
+
 // AXP2101 Power Management wrapper
 // Reference: 05_LVGL_AXP2101_ADC_Data.ino
 
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const AXP2101_ADDR: u8 = 0x34;
+const AXP2101_ADDR: u8 = board::PMIC_I2C_ADDR;
 
 // Key AXP2101 registers
 const REG_STATUS1: u8 = 0x00;

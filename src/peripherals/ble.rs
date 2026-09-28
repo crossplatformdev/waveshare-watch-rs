@@ -20,7 +20,7 @@ pub fn start_advertising<W: Write>(hci: &mut W) -> Result<(), W::Error> {
     // 1) LE Set Advertising Parameters
     //    Opcode 0x2006, 15 bytes of params
     //    Interval: 0x0800 (1.28s) — slow to save power
-    //    Type: ADV_IND (connectable, undirected)
+    //    Type: ADV_NONCONN_IND (non-connectable, undirected)
     //    Channels: all 3 (37, 38, 39)
     hci.write_all(&[
         0x01,                   // H4: HCI command
@@ -28,7 +28,7 @@ pub fn start_advertising<W: Write>(hci: &mut W) -> Result<(), W::Error> {
         15,                     // param length
         0x00, 0x08,             // interval min: 0x0800 (1280 * 0.625ms = 800ms)
         0x00, 0x08,             // interval max: 0x0800
-        0x00,                   // type: ADV_IND
+        0x03,                   // type: ADV_NONCONN_IND
         0x00,                   // own addr type: public
         0x00,                   // peer addr type
         0, 0, 0, 0, 0, 0,      // peer addr (unused)

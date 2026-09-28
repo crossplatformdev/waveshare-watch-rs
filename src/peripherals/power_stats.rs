@@ -39,6 +39,9 @@ pub struct PowerStats {
     pub audio_on: bool,      // codec + PA amplifier
     pub sd_on: bool,         // SD card active / inserted+powered
     pub cpu_mhz: u16,        // current CPU clock (reported by main.rs)
+    pub core1_online: bool,  // secondary Embassy executor heartbeat observed
+    pub last_tick_ms: u16,   // most recent main-loop sleep budget
+    pub wake_slip_ms_max: u16, // max observed wake latency beyond budget
     pub brightness: u8,      // 0x00..0xFF display brightness
     pub battery_mv: u16,
     pub battery_pct: u8,
@@ -55,6 +58,9 @@ impl PowerStats {
             audio_on: false,
             sd_on: false,
             cpu_mhz: 160,
+            core1_online: false,
+            last_tick_ms: 0,
+            wake_slip_ms_max: 0,
             brightness: 0xA0,
             battery_mv: 0,
             battery_pct: 0,

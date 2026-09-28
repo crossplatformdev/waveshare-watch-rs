@@ -10,7 +10,7 @@ use embedded_graphics::text::{Alignment, Text};
 use embedded_graphics::geometry::Point as EgPoint;
 
 use crate::apps::{App, AppInput, AppResult};
-use crate::peripherals::touch::SwipeDirection;
+use crate::app_sdk::SwipeDirection;
 
 const GRID: usize = 4;
 const CELL_SIZE: i32 = 90;

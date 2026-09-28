@@ -1,9 +1,13 @@
+#![allow(dead_code)]
+
 // FT3168 Touch Controller driver
 // Reference: Arduino_FT3x68.h - I2C address 0x38
 
+use crate::app_sdk::{SwipeDirection, TouchPoint};
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const FT3168_ADDR: u8 = 0x38;
+const FT3168_ADDR: u8 = board::TP_I2C_ADDR;
 
 // Registers
 const REG_FINGER_NUM: u8 = 0x02;
@@ -13,13 +17,6 @@ const REG_Y1_H: u8 = 0x05;
 const REG_Y1_L: u8 = 0x06;
 const REG_POWER_MODE: u8 = 0xA5;
 const REG_GESTURE_ID: u8 = 0xD3;
-
-#[derive(Debug, Clone, Copy)]
-pub struct TouchPoint {
-    pub x: u16,
-    pub y: u16,
-    pub fingers: u8,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Gesture {
@@ -42,15 +39,6 @@ pub struct SwipeEvent {
     pub start_y: u16,
     pub end_x: u16,
     pub end_y: u16,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SwipeDirection {
-    Up,
-    Down,
-    Left,
-    Right,
-    Tap,
 }
 
 pub struct Ft3168Touch<I> {
@@ -107,11 +95,7 @@ impl<I: I2c> Ft3168Touch<I> {
         let x = ((x_h & 0x0F) << 8) | x_l;
         let y = ((y_h & 0x0F) << 8) | y_l;
 
-        Ok(Some(TouchPoint {
-            x,
-            y,
-            fingers,
-        }))
+        Ok(Some(TouchPoint { x, y, fingers }))
     }
 
     /// Poll touch and detect swipe gestures.
@@ -147,10 +131,18 @@ impl<I: I2c> Ft3168Touch<I> {
                         SwipeDirection::Tap
                     } else if abs_dx > abs_dy * 3 / 2 {
                         // Clearly horizontal
-                        if dx > 0 { SwipeDirection::Right } else { SwipeDirection::Left }
+                        if dx > 0 {
+                            SwipeDirection::Right
+                        } else {
+                            SwipeDirection::Left
+                        }
                     } else if abs_dy > abs_dx * 3 / 2 {
                         // Clearly vertical
-                        if dy > 0 { SwipeDirection::Down } else { SwipeDirection::Up }
+                        if dy > 0 {
+                            SwipeDirection::Down
+                        } else {
+                            SwipeDirection::Up
+                        }
                     } else {
                         // Diagonal - treat as tap (ignore)
                         SwipeDirection::Tap

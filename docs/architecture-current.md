@@ -25,7 +25,7 @@ The same I2C peripheral is shared using `RefCell` and `RefCellDevice`. The displ
 
 `main` initializes the HAL at 160 MHz, internal and PSRAM allocators, RTOS timer, software interrupts, buses, display, sensors, storage/audio interfaces, and radio objects. It allocates a two-buffer display framebuffer and two full-frame swipe snapshots. An adaptive `select3` wait races a timer against falling-edge waits on touch and BOOT, after which the core-0 main task samples services and runs application logic. Core 1 now hosts a second Embassy executor that publishes a heartbeat used by the power diagnostics instead of leaving the secondary core unused.
 
-The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path. The firmware now records the current sleep budget and worst observed wake-latency slip in `PowerStats` for on-device inspection.
+The loop is timed rather than continuously spinning during normal idle, but it still wakes periodically. Main-loop tick periods include 16 ms while a button/touch is held, 30 s with display off, 10 s in AOD, 1 s for a static clock, 100 ms for sensors and several menus, and 33 ms for games/gyro animation. Touch I2C reads are conditional in the watchface path; the launcher also reads touch in its dispatch path. The firmware now records the current sleep budget and worst observed wake-latency slip in `PowerStats` for on-device inspection, and it uses explicit runtime policy helpers for IMU leases and wireless idle auto-off.
 
 Most screen changes transmit the complete framebuffer. `Framebuffer::flush_region` supports a bounded rectangle, but normal rendering does not use a dirty-region compositor. TE synchronization is a bounded GPIO level loop, not an interrupt/event wait.
 
@@ -38,7 +38,7 @@ Most screen changes transmit the complete framebuffer. `Framebuffer::flush_regio
 
 ## Current architectural constraints
 
-- `main.rs` is the central owner of hardware and policy; hardware APIs are not isolated behind system services.
+- `main.rs` is the central owner of hardware and policy; hardware APIs are not isolated behind system services, though some power/resource decisions are now named policy helpers instead of open-coded conditions.
 - Error results are frequently ignored or converted to defaults in initialization and the event loop.
 - There is no app isolation, capability model, resource lease manager, transactional app install, OTA flow, simulator, or host test suite in the baseline.
 - The present M4 slice establishes only a coarse core policy (UI/event loop plus active services on core 0; secondary executor reserved on core 1). It does not yet migrate more application work to core 1 or include broader latency instrumentation, load balancing, or application-level affinity controls.

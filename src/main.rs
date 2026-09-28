@@ -96,8 +96,30 @@ static SMARTHOME_RESPONSE: Signal<CriticalSectionRawMutex, SmartHomeResponse> = 
 static EXECUTOR_CORE_1: StaticCell<esp_rtos::embassy::Executor> = StaticCell::new();
 static APP_CORE_STACK: StaticCell<CoreStack<8192>> = StaticCell::new();
 static CORE1_HEARTBEAT_MS: AtomicU32 = AtomicU32::new(0);
+const WIRELESS_TOGGLE_DEBOUNCE_MS: u64 = 1_000;
+const WIRELESS_IDLE_AUTO_OFF_SECS: u64 = 300;
+const WIRELESS_IDLE_RECHECK_SECS: u64 = 60;
 
 fn now_ms() -> u32 { Instant::now().as_millis() as u32 }
+
+fn wireless_idle_expired(now: Instant, last_policy_change: Instant, idle_secs: u64) -> bool {
+    idle_secs >= WIRELESS_IDLE_AUTO_OFF_SECS
+        && (now - last_policy_change).as_secs() >= WIRELESS_IDLE_RECHECK_SECS
+}
+
+fn imu_lease_active(
+    screen_state: u8,
+    app_state: AppState,
+    current_page: Page,
+    gyro_enabled: bool,
+) -> bool {
+    screen_state >= 2
+        && (gyro_enabled
+            || app_state == AppState::Maze
+            || app_state == AppState::Tetris
+            || app_state == AppState::Flappy
+            || (app_state == AppState::Watchface && current_page == Page::Sensors))
+}
 
 #[embassy_executor::task]
 async fn core1_heartbeat_task() -> ! {
@@ -692,7 +714,7 @@ async fn main(_spawner: Spawner) {
     let mut wifi_started: bool = false;         // controller.start() called
     let mut wifi_connected: bool = false;       // connect_async succeeded
     let mut ntp_synced: bool = false;
-    let mut last_wifi_idle_check = Instant::now();
+    let mut last_wireless_policy_change = Instant::now();
     // Request pending from a UI tap on the WiFi button.
     let mut wifi_toggle_request: bool = false;
     // BLE state
@@ -780,12 +802,12 @@ async fn main(_spawner: Spawner) {
         // IMU only when an interactive consumer needs it (gyro enabled, IMU-driven game, sensors page).
         // When screen is off OR no consumer needs it, we power-down the IMU completely
         // (CTRL7 = 0). The QMI8658's gyro alone draws ~1.5 mA so this is a meaningful win.
-        let need_imu = screen_state >= 2
-            && (watchface.gyro_enabled
-                || app_state == AppState::Maze
-                || app_state == AppState::Tetris
-                || app_state == AppState::Flappy
-                || (app_state == AppState::Watchface && current_page == Page::Sensors));
+        let need_imu = imu_lease_active(
+            screen_state,
+            app_state,
+            current_page,
+            watchface.gyro_enabled,
+        );
         if need_imu && !imu_powered {
             let _ = imu.power_up();
             imu_powered = true;
@@ -979,6 +1001,7 @@ async fn main(_spawner: Spawner) {
                 if app_state == AppState::Watchface {
                     watchface.force_redraw();
                     page_dirty = true;
+                    last_wireless_policy_change = now;
                 }
             }
         }
@@ -1019,10 +1042,12 @@ async fn main(_spawner: Spawner) {
         // the user leaves WiFi enabled and wanders off, the radio drops on
         // its own. Turning it back on is manual — intentional.
         // Debounce the WiFi button: ignore rapid re-taps within 1 s.
-        if wifi_toggle_request && (now - last_wifi_idle_check).as_millis() >= 1000 {
+        if wifi_toggle_request
+            && (now - last_wireless_policy_change).as_millis() >= WIRELESS_TOGGLE_DEBOUNCE_MS
+        {
             wifi_on_request = !wifi_on_request;
             wifi_toggle_request = false;
-            last_wifi_idle_check = now;
+            last_wireless_policy_change = now;
             println!("[WIFI] User toggled → {}", if wifi_on_request { "ON" } else { "OFF" });
         } else if wifi_toggle_request {
             wifi_toggle_request = false; // swallow the bounce
@@ -1071,7 +1096,7 @@ async fn main(_spawner: Spawner) {
                     }
                 }
             }
-            last_wifi_idle_check = now;
+            last_wireless_policy_change = now;
         }
         if !wifi_on_request && wifi_connected {
             let _ = wifi_controller.disconnect_async().await;
@@ -1082,13 +1107,12 @@ async fn main(_spawner: Spawner) {
             wifi_started = false;
             watchface.force_redraw();
             page_dirty = true;
-            last_wifi_idle_check = now;
+            last_wireless_policy_change = now;
         }
-        // Safety net: WiFi left on, user idle 5 min → auto-off.
-        if wifi_on_request && idle_secs >= 300
-            && (now - last_wifi_idle_check).as_secs() >= 60 {
+        // Safety net: radio leases auto-expire after prolonged user idle.
+        if wifi_on_request && wireless_idle_expired(now, last_wireless_policy_change, idle_secs) {
             wifi_on_request = false;
-            last_wifi_idle_check = now;
+            last_wireless_policy_change = now;
         }
 
         // === BLE state machine ===
@@ -1111,6 +1135,16 @@ async fn main(_spawner: Spawner) {
             power_stats.ble_on = ble_on;
             watchface.force_redraw();
             page_dirty = true;
+            last_wireless_policy_change = now;
+        } else if ble_on && wireless_idle_expired(now, last_wireless_policy_change, idle_secs) {
+            let _ = crate::peripherals::ble::stop_advertising(&mut ble_connector);
+            println!("[BLE] Auto-off after idle");
+            ble_on = false;
+            watchface.ble_on = false;
+            power_stats.ble_on = false;
+            watchface.force_redraw();
+            page_dirty = true;
+            last_wireless_policy_change = now;
         }
 
         // === AOD render path ===

@@ -33,7 +33,7 @@ Most screen changes transmit the complete framebuffer. `Framebuffer::flush_regio
 
 - Display, touch, RTC, IMU, PMIC battery/status, SD card, speaker-output beep, Wi-Fi connection/NTP, and BLE advertising have code paths.
 - App implementations are statically linked and dispatched in-process.
-- The MP3 player and SmartHome applications are UI/control scaffolding; this baseline does not establish end-to-end MP3 playback or HTTP/TLS product functionality.
+- The MP3 player is still UI scaffolding only. The SmartHome application now hands bounded HTTP requests to `main.rs`, which owns the network stack and writes short status/response summaries back to the app state; this still does not establish TLS or broader product-level HTTP behavior.
 - Driver structs and board constants do not by themselves establish that a feature is electrically verified or complete; see [hardware-map.md](hardware-map.md) and [known-hardware-errata.md](known-hardware-errata.md).
 
 ## Current architectural constraints
@@ -50,5 +50,5 @@ Most screen changes transmit the complete framebuffer. `Framebuffer::flush_regio
 - There are 12 direct `.unwrap()`/`.expect()` calls in Rust sources. They include bus/DMA/radio setup and the fixed FAT timestamp construction in `src/main.rs`; failures in hardware setup can panic. Other fallible results are frequently discarded or replaced with defaults, including QSPI transfer results in `src/drivers/qspi_bus.rs`.
 - Polling and waits include the adaptive `Timer::after` main-loop tick, conditional touch I2C reads, RTC/battery periodic reads, and two bounded 400-iteration TE level loops in `src/drivers/framebuffer.rs`. Other loops stream QSPI chunks or handle network/game logic; not every loop is an idle busy-wait.
 - Heap-backed allocations include four full-frame `Vec<u16>` buffers, an 8,000-byte QSPI scratch `Vec`, and a dynamically sized SD MP3-file list. There is no per-frame allocation measurement or allocator telemetry.
-- Existing TODO markers include SD power gating, SmartHome request dispatch, and Wi-Fi scanning.
+- Existing TODO markers include SD power gating and Wi-Fi scanning.
 - Source scanning did not find `#[test]`/`#[cfg(test)]`; host tests could not reach project code with the installed stable toolchain. See [build-baseline.md](build-baseline.md).

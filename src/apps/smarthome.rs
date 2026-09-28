@@ -114,7 +114,7 @@ impl SmartHomeApp {
         app.add_button("Porte", "http://192.168.1.10/api/door/lock", HttpMethod::Post);
         app.add_button("Temperature", "http://192.168.1.10/api/temp", HttpMethod::Get);
         app.add_button("TV", "http://192.168.1.10/api/tv/toggle", HttpMethod::Get);
-        app.add_button("Custom API", "http://example.com/api", HttpMethod::Get);
+        app.add_button("Status", "http://192.168.1.10/api/status", HttpMethod::Get);
 
         app
     }
@@ -137,13 +137,13 @@ impl SmartHomeApp {
         }
     }
 
-    /// Get the button that was tapped (if any) - returns (index, url)
-    pub fn get_pending_request(&mut self) -> Option<(usize, &str)> {
+    /// Get the button that was tapped (if any) - returns (index, method, url)
+    pub fn get_pending_request(&mut self) -> Option<(usize, HttpMethod, &str)> {
         if let Some(idx) = self.selected.take() {
             if idx < self.count {
                 self.buttons[idx].state = ButtonState::Sending;
                 let url = core::str::from_utf8(&self.buttons[idx].url[..self.buttons[idx].url_len]).unwrap_or("");
-                return Some((idx, url));
+                return Some((idx, self.buttons[idx].method, url));
             }
         }
         None

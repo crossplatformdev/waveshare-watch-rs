@@ -20,6 +20,8 @@ use esp_backtrace as _;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 use embassy_executor::Spawner;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer};
 
 use esp_hal::delay::Delay;
@@ -54,14 +56,40 @@ use crate::apps::maze::MazeGame;
 use crate::ui::launcher::Launcher;
 use crate::apps::settings::SettingsApp;
 use crate::apps::mp3player::Mp3Player;
-use crate::apps::smarthome::SmartHomeApp;
+use crate::apps::smarthome::{HttpMethod, SmartHomeApp};
 use crate::peripherals::audio::{Es8311, fill_beep_buffer};
+use crate::peripherals::http::{HttpResponse, http_get, http_post};
 
 // Network runner task (must be spawned for WiFi to work)
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, esp_radio::wifi::WifiDevice<'static>>) -> ! {
     runner.run().await
 }
+
+#[derive(Clone, Copy)]
+struct SmartHomeRequest {
+    idx: usize,
+    method: HttpMethod,
+    url: [u8; 96],
+    url_len: usize,
+}
+
+impl SmartHomeRequest {
+    fn url(&self) -> &str {
+        core::str::from_utf8(&self.url[..self.url_len]).unwrap_or("")
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SmartHomeResponse {
+    idx: usize,
+    response: [u8; 32],
+    response_len: usize,
+    success: bool,
+}
+
+static SMARTHOME_REQUEST: Signal<CriticalSectionRawMutex, SmartHomeRequest> = Signal::new();
+static SMARTHOME_RESPONSE: Signal<CriticalSectionRawMutex, SmartHomeResponse> = Signal::new();
 
 // Simple NTP sync (UDP to pool.ntp.org:123)
 async fn ntp_sync(
@@ -120,7 +148,56 @@ async fn ntp_sync(
             let _ = rtc.set_time(&dt);
             Ok(())
         }
+
         _ => Err(()),
+    }
+}
+
+fn summarize_http_response(resp: &HttpResponse) -> alloc::string::String {
+    if resp.body_len > 0 {
+        if let Ok(body) = core::str::from_utf8(&resp.body[..resp.body_len]) {
+            let body = body.trim();
+            if !body.is_empty() {
+                return alloc::format!("{} {}", resp.status, body);
+            }
+        }
+    }
+    alloc::format!("{}", resp.status)
+}
+
+async fn dispatch_smarthome_request(
+    stack: embassy_net::Stack<'static>,
+    method: HttpMethod,
+    url: &str,
+) -> Result<(alloc::string::String, bool), ()> {
+    let resp = match method {
+        HttpMethod::Get => http_get(stack, url).await?,
+        HttpMethod::Post => http_post(stack, url, "").await?,
+    };
+    let success = (200..300).contains(&resp.status);
+    Ok((summarize_http_response(&resp), success))
+}
+
+#[embassy_executor::task]
+async fn smarthome_http_task(stack: embassy_net::Stack<'static>) -> ! {
+    loop {
+        let req = SMARTHOME_REQUEST.wait().await;
+        let (response_text, success) = match dispatch_smarthome_request(stack, req.method, req.url()).await {
+            Ok((response, success)) => (response, success),
+            Err(()) => (alloc::string::String::from("REQ ERR"), false),
+        };
+
+        let mut response = SmartHomeResponse {
+            idx: req.idx,
+            response: [0u8; 32],
+            response_len: 0,
+            success,
+        };
+        let bytes = response_text.as_bytes();
+        let len = bytes.len().min(response.response.len());
+        response.response[..len].copy_from_slice(&bytes[..len]);
+        response.response_len = len;
+        SMARTHOME_RESPONSE.signal(response);
     }
 }
 
@@ -484,6 +561,7 @@ async fn main(_spawner: Spawner) {
     // has been started, but spawning it here avoids having to hot-spawn
     // a task from inside the main loop.
     _spawner.spawn(net_task(runner)).ok();
+    _spawner.spawn(smarthome_http_task(stack)).ok();
 
     let mut boot_button = Input::new(peripherals.GPIO0, InputConfig::default().with_pull(Pull::Up));
     println!("=== All systems GO! (Embassy async, WiFi OFF) ===");
@@ -590,6 +668,7 @@ async fn main(_spawner: Spawner) {
     // BLE state
     let mut ble_on: bool = false;
     let mut ble_toggle_request: bool = false;
+    let mut smarthome_request_in_flight = false;
     // Power-down the IMU at boot — only enable when a consumer (gyro toggle, game, sensors page) needs it.
     let _ = imu.power_down();
     let mut imu_powered = false;
@@ -1283,10 +1362,33 @@ async fn main(_spawner: Spawner) {
             }
 
             AppState::SmartHome => {
+                if let Some(response) = SMARTHOME_RESPONSE.try_take() {
+                    smarthome_request_in_flight = false;
+                    let response_text = core::str::from_utf8(&response.response[..response.response_len]).unwrap_or("ERR");
+                    smarthome_app.set_response(response.idx, response_text, response.success);
+                }
                 let input = AppInput { touch: None, swipe: swipe_event, tap: tap_event, accel, dt_ms: dt_ms.max(1) };
                 smarthome_app.update(&input);
-                // TODO: when get_pending_request() returns a URL, send HTTP request via embassy-net
-                // For now just show the UI
+                if let Some((idx, method, url)) = smarthome_app.get_pending_request() {
+                    if smarthome_request_in_flight {
+                        smarthome_app.set_response(idx, "BUSY", false);
+                    } else if wifi_connected {
+                        let mut request = SmartHomeRequest {
+                            idx,
+                            method,
+                            url: [0u8; 96],
+                            url_len: 0,
+                        };
+                        let url_bytes = url.as_bytes();
+                        let url_len = url_bytes.len().min(request.url.len());
+                        request.url[..url_len].copy_from_slice(&url_bytes[..url_len]);
+                        request.url_len = url_len;
+                        SMARTHOME_REQUEST.signal(request);
+                        smarthome_request_in_flight = true;
+                    } else {
+                        smarthome_app.set_response(idx, "NO WIFI", false);
+                    }
+                }
                 smarthome_app.render(&mut fb);
                 if now >= next_watchface_flush {
                     fb.flush_vsync(&mut display, &te_pin);

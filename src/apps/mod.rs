@@ -13,6 +13,7 @@ pub mod game2048;
 pub mod launcher;
 pub mod maze;
 pub mod mp3player;
+pub mod sensor;
 pub mod settings;
 pub mod smarthome;
 pub mod snake;
@@ -62,6 +63,7 @@ pub enum AppState {
     Tetris,
     Flappy,
     Maze,
+    Sensor,
     Mp3Player,
     SmartHome,
     Settings,
@@ -85,7 +87,7 @@ pub struct AppManifest {
     pub sandbox: AppSandboxPolicy,
 }
 
-pub const APP_MANIFESTS: [AppManifest; 9] = [
+pub const APP_MANIFESTS: [AppManifest; 10] = [
     AppManifest {
         state: AppState::Launcher,
         app_id: "launcher",
@@ -161,6 +163,19 @@ pub const APP_MANIFESTS: [AppManifest; 9] = [
         launcher_visible: true,
         sandbox: AppSandboxPolicy {
             tick_ms: 33,
+            capabilities: AppCapabilities::MOTION,
+        },
+    },
+    AppManifest {
+        state: AppState::Sensor,
+        app_id: "sensor",
+        display_name: "Sensors",
+        api_version: APP_API_VERSION,
+        lifecycle: AppLifecycle::Foreground,
+        kind: AppKind::User,
+        launcher_visible: true,
+        sandbox: AppSandboxPolicy {
+            tick_ms: 100,
             capabilities: AppCapabilities::MOTION,
         },
     },

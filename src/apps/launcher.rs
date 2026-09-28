@@ -21,6 +21,7 @@ fn menu_colors(state: AppState) -> (Rgb565, Rgb565) {
         AppState::Tetris => (Rgb565::new(0, 10, 15), Rgb565::CYAN),
         AppState::Flappy => (Rgb565::new(15, 12, 0), Rgb565::WHITE),
         AppState::Maze => (Rgb565::new(2, 4, 15), Rgb565::WHITE),
+        AppState::Sensor => (Rgb565::new(4, 12, 12), Rgb565::CYAN),
         AppState::Mp3Player => (Rgb565::new(0, 8, 15), Rgb565::CYAN),
         AppState::SmartHome => (Rgb565::new(8, 4, 15), Rgb565::new(20, 10, 31)),
         AppState::Settings => (Rgb565::new(6, 12, 6), Rgb565::WHITE),

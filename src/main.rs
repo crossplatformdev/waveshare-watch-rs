@@ -6,6 +6,7 @@ extern crate alloc;
 mod board;
 mod drivers;
 mod peripherals;
+mod services;
 mod ui;
 mod apps;
 mod app_sdk;
@@ -63,6 +64,7 @@ use crate::apps::tetris::TetrisGame;
 use crate::apps::flappy::FlappyGame;
 use crate::apps::maze::MazeGame;
 use crate::apps::launcher::Launcher;
+use crate::apps::sensor::SensorApp;
 use crate::apps::settings::SettingsApp;
 use crate::apps::mp3player::Mp3Player;
 use crate::apps::smarthome::{HttpMethod, SmartHomeApp};
@@ -123,6 +125,7 @@ fn imu_lease_active(
     screen_state >= 2
         && (gyro_enabled
             || app_state == AppState::Maze
+            || app_state == AppState::Sensor
             || app_state == AppState::Tetris
             || app_state == AppState::Flappy
             || (app_state == AppState::Watchface && current_page == Page::Sensors))
@@ -151,6 +154,7 @@ fn boot_back_target(app_state: AppState) -> AppState {
         | AppState::Tetris
         | AppState::Flappy
         | AppState::Maze
+        | AppState::Sensor
         | AppState::Mp3Player
         | AppState::SmartHome
         | AppState::Settings => AppState::Launcher,
@@ -710,6 +714,7 @@ async fn main(_spawner: Spawner) {
     let mut tetris_game = TetrisGame::new();
     let mut flappy_game = FlappyGame::new();
     let mut maze_game = MazeGame::new();
+    let mut sensor_app = SensorApp::new();
     let mut launcher = Launcher::new();
     let mut settings_app = SettingsApp::new();
     if !wifi_ssid.is_empty() {
@@ -932,6 +937,19 @@ async fn main(_spawner: Spawner) {
             }
             if let Ok(t) = imu.read_temperature() {
                 imu_temp = (t * 10.0) as i16;
+            }
+        }
+        if services::sensor::take_request() {
+            if app_state == AppState::Sensor && app_supports(app_state, AppCapabilities::MOTION) {
+                services::sensor::publish_snapshot(services::sensor::SensorSnapshot {
+                    accel: (
+                        (accel.0 * 100.0) as i16,
+                        (accel.1 * 100.0) as i16,
+                        (accel.2 * 100.0) as i16,
+                    ),
+                    gyro: gyro_data,
+                    temp_c10: imu_temp,
+                });
             }
         }
 
@@ -1561,6 +1579,7 @@ async fn main(_spawner: Spawner) {
                                     AppState::Tetris => tetris_game.enter(),
                                     AppState::Flappy => flappy_game.enter(),
                                     AppState::Maze => maze_game.enter(),
+                                    AppState::Sensor => sensor_app.enter(),
                                     AppState::Mp3Player => mp3_player.enter(),
                                     AppState::SmartHome => smarthome_app.enter(),
                                     AppState::Settings => settings_app.enter(),
@@ -1647,6 +1666,21 @@ async fn main(_spawner: Spawner) {
                     maze_game.render(&mut fb);
                     fb.flush_vsync(&mut display, &te_pin);
                     next_watchface_flush = now + Duration::from_millis(33);
+                }
+                if boot_button.is_low() {
+                    let target = boot_back_target(app_state);
+                    apply_navigation_target(&mut app_state, target, &mut launcher, &mut settings_app, &mut watchface, &mut page_dirty);
+                    Timer::after(Duration::from_millis(NAV_BUTTON_DEBOUNCE_MS)).await;
+                }
+            }
+
+            AppState::Sensor => {
+                let input = sandboxed_app_input(app_state, None, swipe_event, tap_event, accel, dt_ms.max(1));
+                sensor_app.update(&input);
+                sensor_app.render(&mut fb);
+                if now >= next_watchface_flush {
+                    fb.flush_vsync(&mut display, &te_pin);
+                    next_watchface_flush = now + Duration::from_millis(100);
                 }
                 if boot_button.is_low() {
                     let target = boot_back_target(app_state);

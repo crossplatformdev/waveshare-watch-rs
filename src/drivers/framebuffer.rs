@@ -135,6 +135,20 @@ impl Framebuffer {
         display.bus_mut().end_pixels();
     }
 
+    /// VSync partial flush for watchface invalidation-driven updates.
+    pub fn flush_region_vsync(
+        &self,
+        display: &mut Co5300Display,
+        te: &esp_hal::gpio::Input<'_>,
+        x: u16,
+        y: u16,
+        w: u16,
+        h: u16,
+    ) {
+        for _ in 0..400 { if te.is_high() { break; } }
+        self.flush_region(display, x, y, w, h);
+    }
+
     /// Get raw buffer for direct access.
     pub fn buffer(&self) -> &[u16] {
         &self.buf

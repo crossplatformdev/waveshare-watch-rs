@@ -1180,6 +1180,7 @@ async fn main(_spawner: Spawner) {
             AppState::Watchface => {
                 if !swiping {
                     let mut need_flush = false;
+                    let mut partial_flush_region = None;
                     if page_dirty {
                         fb.clear_color(current_page.color());
                         match current_page {
@@ -1204,8 +1205,13 @@ async fn main(_spawner: Spawner) {
                         Page::Clock => {
                             // Only render if WatchFace says something is dirty.
                             if watchface.needs_render() {
-                                let _ = watchface.render(&mut fb);
-                                need_flush = true;
+                                if let Ok(render_outcome) = watchface.render(&mut fb) {
+                                    if render_outcome.full_redraw {
+                                        need_flush = true;
+                                    } else if let Some(region) = render_outcome.dirty_region() {
+                                        partial_flush_region = Some(region);
+                                    }
+                                }
                             }
                         }
                         Page::Sensors => {
@@ -1237,6 +1243,9 @@ async fn main(_spawner: Spawner) {
                     // gate it strictly on dirtiness.
                     if need_flush {
                         fb.flush_vsync(&mut display, &te_pin);
+                        next_watchface_flush = now;
+                    } else if let Some(region) = partial_flush_region {
+                        fb.flush_region_vsync(&mut display, &te_pin, region.x, region.y, region.w, region.h);
                         next_watchface_flush = now;
                     }
                 }

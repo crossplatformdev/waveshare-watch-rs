@@ -96,6 +96,15 @@ pub struct RenderOutcome {
     pub gyro_region: Option<FlushRegion>,
 }
 
+impl RenderOutcome {
+    pub fn dirty_region(&self) -> Option<FlushRegion> {
+        [self.time_region, self.battery_region, self.gyro_region]
+            .into_iter()
+            .flatten()
+            .reduce(|acc, region| acc.union(region))
+    }
+}
+
 pub struct WatchFace {
     hours: u8, minutes: u8, seconds: u8,
     battery_percent: u8, battery_voltage: u16, is_charging: bool,

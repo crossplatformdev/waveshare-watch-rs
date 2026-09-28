@@ -5,6 +5,7 @@
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::DrawTarget;
 
+use crate::app_sdk::{AppCapabilities, AppLifecycle, AppSandboxPolicy, APP_API_VERSION};
 use crate::peripherals::touch::{SwipeDirection, TouchPoint};
 
 pub mod snake;
@@ -23,39 +24,6 @@ pub struct AppInput {
     pub tap: bool,
     pub accel: (f32, f32, f32),
     pub dt_ms: u32, // milliseconds since last frame
-}
-
-pub const APP_API_VERSION: u16 = 1;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AppLifecycle {
-    Foreground,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct AppCapabilities(u16);
-
-impl AppCapabilities {
-    pub const NONE: Self = Self(0);
-    pub const TOUCH: Self = Self(1 << 0);
-    pub const MOTION: Self = Self(1 << 1);
-    pub const NETWORK: Self = Self(1 << 2);
-    pub const AUDIO: Self = Self(1 << 3);
-    pub const STORAGE: Self = Self(1 << 4);
-
-    pub const fn union(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-
-    pub const fn contains(self, other: Self) -> bool {
-        (self.0 & other.0) == other.0
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct AppSandboxPolicy {
-    pub tick_ms: u16,
-    pub capabilities: AppCapabilities,
 }
 
 /// Result of an app update

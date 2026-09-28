@@ -8,6 +8,7 @@ mod drivers;
 mod peripherals;
 mod ui;
 mod apps;
+mod app_sdk;
 #[cfg(feature = "wasm-spike")]
 mod wasm_spike;
 #[cfg(feature = "wasm-spike")]
@@ -54,7 +55,8 @@ use crate::peripherals::imu::Qmi8658Imu;
 use crate::ui::watchface::WatchFace;
 use crate::ui::pages::{self, Page};
 use crate::ui::power_page;
-use crate::apps::{app_manifest, app_supports, App, AppCapabilities, AppInput, AppLifecycle, APP_API_VERSION, AppResult, AppState};
+use crate::app_sdk::{AppCapabilities, AppLifecycle, APP_API_VERSION};
+use crate::apps::{app_manifest, app_supports, App, AppInput, AppResult, AppState};
 use crate::apps::snake::SnakeGame;
 use crate::apps::game2048::Game2048;
 use crate::apps::tetris::TetrisGame;

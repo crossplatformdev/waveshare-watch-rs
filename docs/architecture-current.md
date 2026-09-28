@@ -4,7 +4,7 @@ Baseline source revision: `5eb445bce1222a7ac9045dfb33231bc39b29abc0`
 
 ## Overview
 
-The firmware is one `no_std`, `no_main` Cargo package (`waveshare-watch-rs` 0.4.0), not a workspace. `src/main.rs` owns peripheral initialization, global state, input handling, power/display state transitions, networking orchestration, and application dispatch. The code is asynchronous at the main-loop boundary through `esp-rtos`/Embassy; the applications and rendering are synchronous and run in the same main task.
+The firmware is one `no_std`, `no_main` Cargo package (`waveshare-watch-rs` 0.4.0), not a workspace. `src/main.rs` owns peripheral initialization, global state, input handling, power/display state transitions, networking orchestration, and application dispatch. The code is asynchronous at the main-loop boundary through `esp-rtos`/Embassy; the applications and rendering are synchronous and run in the same main task. A separate host-side utility crate under `tools/wasmi-spike` now benchmarks a tiny shared Wasm payload with Wasmi, while the firmware carries a feature-gated (`wasm-spike`) probe that can log the same payload's compile/instantiate/host-call/fuel metrics on Xtensa builds.
 
 There is no independent kernel scheduler, application process isolation, inter-core service IPC, or application ABI. App state is selected by a single `AppState` enum and apps receive a frame-oriented `AppInput`. A narrow M9 slice now adds a central app manifest table with API-version and lifecycle metadata, plus lifecycle entry shims layered over the existing in-process apps.
 
@@ -46,6 +46,7 @@ Most screen changes still transmit the complete framebuffer. The clock watchface
 - The present M7 slice centralizes only a narrow subset of navigation policy (watchface launch gestures and BOOT-as-Back targets); broader gesture routing and power-button policy are still inline in `main.rs`.
 - The present M8 slice covers only the settings-record format and recovery logic; persistent media integration and broader app-data storage are still pending.
 - The present M9 slice defines only a versioned foreground-app contract and shared manifest table; `main.rs` still owns hard-coded app instantiation, rendering cadence, and service access.
+- The present M10 slice does not integrate Wasm apps. It only adds a tiny shared benchmark module, a host-side memory/startup/host-call probe, and a firmware feature gate for Xtensa measurements. Until that probe is executed on hardware and its memory/latency numbers are captured, Wasm remains **not yet viable for M11 integration** in this repository.
 - The present baseline records implementation facts only; it is not a target architecture decision.
 
 ## Source audit findings

@@ -8,6 +8,10 @@ mod drivers;
 mod peripherals;
 mod ui;
 mod apps;
+#[cfg(feature = "wasm-spike")]
+mod wasm_spike;
+#[cfg(feature = "wasm-spike")]
+mod wasm_spike_payload;
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -717,6 +721,33 @@ async fn main(_spawner: Spawner) {
     watchface.force_redraw();
     let _ = watchface.render(&mut fb);
     fb.flush(&mut display);
+
+    #[cfg(feature = "wasm-spike")]
+    match crate::wasm_spike::run_boot_probe() {
+        Ok(metrics) => {
+            println!(
+                "WASM spike: module={}B engine={}B linker={}B store={}B compile={}us instantiate={}us compat={}",
+                metrics.module_bytes,
+                metrics.engine_bytes,
+                metrics.linker_bytes,
+                metrics.store_bytes,
+                metrics.compile_us,
+                metrics.instantiate_us,
+                metrics.compat_version,
+            );
+            println!(
+                "WASM spike: host={} / {} calls in {}us checksum={} fuel={}->{} loop={}",
+                metrics.host_call_count,
+                metrics.host_call_iterations,
+                metrics.host_call_us,
+                metrics.host_call_checksum,
+                metrics.fuel_before,
+                metrics.fuel_after,
+                metrics.fuel_loop_result,
+            );
+        }
+        Err(err) => println!("WASM spike failed: {}", err),
+    }
 
     // === Event-driven async main loop ===
     //

@@ -382,15 +382,16 @@ async fn main(_spawner: Spawner) {
     println!("[AUDIO] Init codec...");
     let mut audio_codec = Es8311::new(RefCellDevice::new(&i2c_ref));
     let mut pa_en = Output::new(peripherals.GPIO46, Level::Low, OutputConfig::default());
-    match audio_codec.init() {
-        Ok(()) => println!("[AUDIO] Codec OK"),
-        Err(_) => println!("[AUDIO] Codec FAILED"),
+    if audio_codec.init().is_ok() {
+        println!("[AUDIO] Codec OK");
+        // Full power-down of the analog blocks (not just mute). The PGA, DAC
+        // and HP driver are explicitly cut — saves ~20 mA versus mute() which
+        // only zeroes the volume register. `unmute()` brings them back on
+        // demand at playback time.
+        let _ = audio_codec.shutdown();
+    } else {
+        println!("[AUDIO] Codec FAILED; disabling playback");
     }
-    // Full power-down of the analog blocks (not just mute). The PGA, DAC
-    // and HP driver are explicitly cut — saves ~20 mA versus mute() which
-    // only zeroes the volume register. `unmute()` brings them back on
-    // demand at playback time.
-    let _ = audio_codec.shutdown();
 
     // === I2S Audio Output (using public write_dma) ===
     println!("[AUDIO] Init I2S...");
@@ -1172,15 +1173,17 @@ async fn main(_spawner: Spawner) {
                             // Beep when food eaten via I2S DMA
                             if snake_game.score() > prev_score {
                                 // Unmute codec, then raise PA amplifier, then play
-                                let _ = audio_codec.unmute();
-                                delay.delay_millis(2); // let codec stabilize before enabling amp
-                                pa_en.set_high();
-                                if let Ok(transfer) = i2s_tx.write_dma(&*beep_buf) {
-                                    let _ = transfer.wait();
+                                if audio_codec.is_initialized() {
+                                    let _ = audio_codec.unmute();
+                                    delay.delay_millis(2); // let codec stabilize before enabling amp
+                                    pa_en.set_high();
+                                    if let Ok(transfer) = i2s_tx.write_dma(&beep_buf[..beep_len]) {
+                                        let _ = transfer.wait();
+                                    }
+                                    // Lower amp FIRST, then mute codec to avoid pop
+                                    pa_en.set_low();
+                                    let _ = audio_codec.mute();
                                 }
-                                // Lower amp FIRST, then mute codec to avoid pop
-                                pa_en.set_low();
-                                let _ = audio_codec.mute();
                             }
                         }
                     }

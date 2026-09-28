@@ -46,9 +46,9 @@ Most screen changes transmit the complete framebuffer. `Framebuffer::flush_regio
 
 ## Source audit findings
 
-- Four `unsafe` expressions/blocks are present: direct volatile SYSTEM-register access in `src/peripherals/cpu_clock.rs` and access to I2S descriptors/beep storage for DMA in `src/main.rs`. The I2S descriptor and beep array are two `static mut` declarations; no nearby `// SAFETY:` comments document their invariants.
+- One `unsafe` block remains in `src/peripherals/cpu_clock.rs` for direct volatile SYSTEM-register access. The I2S descriptor and beep storage previously called out here now use `ConstStaticCell` in `src/main.rs` instead of `static mut`.
 - There are 12 direct `.unwrap()`/`.expect()` calls in Rust sources. They include bus/DMA/radio setup and the fixed FAT timestamp construction in `src/main.rs`; failures in hardware setup can panic. Other fallible results are frequently discarded or replaced with defaults, including QSPI transfer results in `src/drivers/qspi_bus.rs`.
 - Polling and waits include the adaptive `Timer::after` main-loop tick, conditional touch I2C reads, RTC/battery periodic reads, and two bounded 400-iteration TE level loops in `src/drivers/framebuffer.rs`. Other loops stream QSPI chunks or handle network/game logic; not every loop is an idle busy-wait.
 - Heap-backed allocations include four full-frame `Vec<u16>` buffers, an 8,000-byte QSPI scratch `Vec`, and a dynamically sized SD MP3-file list. There is no per-frame allocation measurement or allocator telemetry.
-- Existing TODO markers include an outdated I2S wiring note (I2S TX is in fact initialized), SD power gating, SmartHome request dispatch, and Wi-Fi scanning.
+- Existing TODO markers include SD power gating, SmartHome request dispatch, and Wi-Fi scanning.
 - Source scanning did not find `#[test]`/`#[cfg(test)]`; host tests could not reach project code with the installed stable toolchain. See [build-baseline.md](build-baseline.md).

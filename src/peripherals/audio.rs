@@ -3,9 +3,10 @@
 // ES8311 Audio codec - proper init from Waveshare C reference
 // + I2S DMA playback via public write_dma()
 
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const ES8311_ADDR: u8 = 0x18;
+const ES8311_ADDR: u8 = board::AUDIO_I2C_ADDR;
 
 pub struct Es8311<I> {
     i2c: I,

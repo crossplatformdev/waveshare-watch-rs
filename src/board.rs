@@ -35,6 +35,9 @@ pub const IMU_I2C_ADDR: u8 = 0x6B;
 // === RTC (PCF85063A) ===
 pub const RTC_I2C_ADDR: u8 = 0x51;
 
+// === Audio codec (ES8311) ===
+pub const AUDIO_I2C_ADDR: u8 = 0x18;
+
 // === SD Card ===
 pub const SD_CLK: u8 = 2;
 pub const SD_CMD: u8 = 1;

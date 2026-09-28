@@ -3,9 +3,10 @@
 // FT3168 Touch Controller driver
 // Reference: Arduino_FT3x68.h - I2C address 0x38
 
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const FT3168_ADDR: u8 = 0x38;
+const FT3168_ADDR: u8 = board::TP_I2C_ADDR;
 
 // Registers
 const REG_FINGER_NUM: u8 = 0x02;

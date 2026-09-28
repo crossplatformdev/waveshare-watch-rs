@@ -18,8 +18,8 @@ The firmware ELF was built successfully with Xtensa Rust 1.97.0-nightly (`1.97.0
 | Four full-frame buffers total | 1,646,560 bytes (~1.57 MiB) | Source-level allocated capacity; actual PSRAM placement and allocator overhead not measured |
 | QSPI pixel scratch | 8,000 bytes | Heap `Vec<u8>` in `QspiBus` |
 | SPI DMA macro argument | 8,000 bytes | `dma_buffers!(8000)` used for each RX/TX buffer; linker/runtime placement not confirmed |
-| Audio beep array | 4,000 bytes | `static mut` buffer |
-| I2S TX descriptors | 8 descriptors | `static mut`; byte footprint not measured here |
+| Audio beep array | 4,000 bytes | `ConstStaticCell<[u8; 4000]>` backing storage |
+| I2S TX descriptors | 8 descriptors | `ConstStaticCell<[DmaDescriptor; 8]>`; byte footprint not measured here |
 | Internal heap request | 200 KiB | `esp_alloc::heap_allocator!(size: 200 * 1024)` in `main` |
 | PSRAM allocator | PSRAM peripheral passed to allocator macro | OPI mode set in `.cargo/config.toml`; allocatable/free/peak bytes not recorded |
 | Network/radio/resources, task stacks, DMA and runtime | Unknown | No map file, allocator instrumentation, stack watermark, or radio memory report |

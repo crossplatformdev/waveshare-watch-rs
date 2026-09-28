@@ -25,7 +25,6 @@ use embassy_time::{Duration, Instant, Timer};
 use esp_hal::delay::Delay;
 use esp_hal::dma::{DmaRxBuf, DmaTxBuf};
 use esp_hal::dma_buffers;
-// use esp_hal::i2s::master::{I2s, Config as I2sConfig, DataFormat}; // TODO: wire I2S
 use esp_hal::gpio::{InputConfig, Level, Output, OutputConfig, Pull, Input};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
@@ -222,7 +221,7 @@ async fn main(_spawner: Spawner) {
     // === I2C Bus ===
     let i2c = I2c::new(
         peripherals.I2C0,
-        I2cConfig::default().with_frequency(Rate::from_khz(400)),
+        I2cConfig::default().with_frequency(Rate::from_hz(board::I2C_FREQ_HZ)),
     )
     .expect("I2C failed")
     .with_sda(peripherals.GPIO15)

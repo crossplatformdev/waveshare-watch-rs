@@ -4,9 +4,10 @@
 // Reference: SensorLib/src/SensorQMI8658.hpp
 // I2C address 0x6B
 
+use crate::board;
 use embedded_hal::i2c::I2c;
 
-const QMI8658_ADDR: u8 = 0x6B;
+const QMI8658_ADDR: u8 = board::IMU_I2C_ADDR;
 
 // Registers
 const REG_WHO_AM_I: u8 = 0x00;

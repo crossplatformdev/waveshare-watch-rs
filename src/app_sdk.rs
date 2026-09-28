@@ -13,6 +13,8 @@ impl AppLifecycle {
 }
 
 pub const APP_API_VERSION: u16 = 1;
+pub const UPDATE_MANIFEST_VERSION: u16 = 1;
+pub const UPDATE_SIGNATURE_ALGORITHM: &str = "ed25519";
 
 #[derive(Debug, Clone, Copy)]
 pub struct TouchPoint {
@@ -29,6 +31,33 @@ pub enum SwipeDirection {
     Right,
     Tap,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum UpdateKind {
+    Firmware,
+    App,
+}
+
+impl UpdateKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Firmware => "firmware",
+            Self::App => "app",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "firmware" => Some(Self::Firmware),
+            "app" => Some(Self::App),
+            _ => None,
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub const UPDATE_KIND_NAMES: [(&str, UpdateKind); 2] =
+    [("firmware", UpdateKind::Firmware), ("app", UpdateKind::App)];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AppCapabilities(u16);
